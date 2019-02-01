@@ -73,11 +73,6 @@ public:
     //! Function that computes the inertial thrust direction for each state derivative function evaluation
     Eigen::Vector3d getCurrentThrustDirection( const double currentTime )
     {
-        if(  vehicleFlightConditions_ == nullptr )
-        {
-            vehicleFlightConditions_ = vehicleBody_->getFlightConditions( );
-        }
-
         // Retrieve thrust angle
         double currentThrustAngle = thrustAngleInterpolator_->interpolate( currentTime );
 
@@ -87,7 +82,7 @@ public:
 
         // Retrieve rotation from V-frame to inertial frame
         Eigen::Quaterniond verticalToInertialFrame =
-                vehicleFlightConditions_->getAerodynamicAngleCalculator( )->getRotationQuaternionBetweenFrames(
+                vehicleBody_->getFlightConditions( )->getAerodynamicAngleCalculator( )->getRotationQuaternionBetweenFrames(
                     vertical_frame, inertial_frame );
 
         // Return thrust direction
@@ -103,18 +98,22 @@ public:
 
 private:
 
+    //! Object containing properties of the vehicle
     std::shared_ptr< Body > vehicleBody_;
 
+    //! Parameter containing the solution parameter vector
     std::vector< double > parameterVector_;
 
+    //! Map containing the thrust (value) as a function of time (key)
     std::map< double, double > thrustAngleMap_;
 
+    //! Object that interpolates the thrust as a function of time
     std::shared_ptr< OneDimensionalInterpolator< double, double > > thrustAngleInterpolator_;
 
-    std::shared_ptr< FlightConditions > vehicleFlightConditions_;
-
+    //! Constant time between thrust angle nodes
     double timeInterval_;
 
+    //! Constant magnitude of the thrust
     double thrustMagnitude_;
 
 };
@@ -122,7 +121,7 @@ private:
 /*!
  *   This function computes the dynamics of a lunar ascent vehicle, starting at zero velocity on the Moon's surface. The only
  *   accelerations acting on the spacecraft are the Moon's point-mass gravity, and the thrust of the vehicle. Both the
- *   translational dynamics and mass of the vehicle are propagated, using a specific impulse Isp of 250 s.
+ *   translational dynamics and mass of the vehicle are propagated, using a fixed specific impulse.
  *
  *   The thrust is computed based on a fixed thrust magnitude, and a variable thrust direction. The trust direction is defined
  *   on a set of 5 nodes, spread eavenly in time. At each node, a thrust angle theta is defined, which gives the angle between the
@@ -210,150 +209,130 @@ int main( )
     // Finalize body creation.
     setGlobalFrameBodyEphemerides( bodyMap, "Moon", "ECLIPJ2000" );
 
-    // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    std::vector< std::pair< double, double > > thrustParametersLimits =
-        {{ 5.0E3, 20.0E3 }, { 10, 100.0 }, { -0.1, 0.1 }, { -0.5, 0.5 }, { -0.7, 0.7 }, { -1.0, 1.0 }, { -1.3, 1.3 } };
-    std::vector< std::function< double( ) > > parameterMonteCarloFunctions;
-    for( int i = 0; i < thrustParametersLimits.size( ); i++ )
-    {
-        parameterMonteCarloFunctions.push_back(
-                    statistics::createBoostContinuousRandomVariableGeneratorFunction(
-                        statistics::uniform_boost_distribution,
-        { thrustParametersLimits.at( i ).first, thrustParametersLimits.at( i ).second }, i ) );
-    }
+
+    std::vector< double > thrustParameters;
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Define thrust functions
+    std::shared_ptr< LunarAscentThrustGuidance > thrustGuidance =
+            std::make_shared< LunarAscentThrustGuidance >(
+                bodyMap.at( "Vehicle" ), initialTime, thrustParameters );
+    std::function< Eigen::Vector3d( const double ) > thrustDirectionFunction =
+            std::bind( &LunarAscentThrustGuidance::getCurrentThrustDirection, thrustGuidance, std::placeholders::_1 );
+    std::function< double( const double ) > thrustMagnitudeFunction =
+            std::bind( &LunarAscentThrustGuidance::getCurrentThrustMagnitude, thrustGuidance, std::placeholders::_1 );
+
+    std::shared_ptr< ThrustDirectionGuidanceSettings > thrustDirectionGuidanceSettings =
+            std::make_shared< CustomThrustDirectionSettings >( thrustDirectionFunction );
+    std::shared_ptr< ThrustMagnitudeSettings > thrustMagnitudeSettings =
+            std::make_shared< FromFunctionThrustMagnitudeSettings >(
+                thrustMagnitudeFunction, [ = ]( const double ){ return constantSpecificImpulse; } );
+
+    // Define acceleration settings
+    SelectedAccelerationMap accelerationMap;
+    std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfVehicle;
+    accelerationsOfVehicle[ "Moon" ].push_back( std::make_shared< AccelerationSettings >(
+                                                    basic_astrodynamics::central_gravity ) );
+    accelerationsOfVehicle[ "Vehicle" ].push_back( std::make_shared< ThrustAccelerationSettings >(
+                                                       thrustDirectionGuidanceSettings, thrustMagnitudeSettings ) );
+    accelerationMap[ "Vehicle" ] = accelerationsOfVehicle;
 
 
-    for( int i = 0; i < 1000; i++ )
-    {
-        std::cout<<i<<std::endl;
-        std::vector< double > thrustParameters;
-        for( int j = 0; j < parameterMonteCarloFunctions.size( ); j++ )
-        {
-            thrustParameters.push_back( parameterMonteCarloFunctions.at( j )( ) );
-        }
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Define propagator settings variables.
+    std::vector< std::string > bodiesToPropagate;
+    std::vector< std::string > centralBodies;
+    bodiesToPropagate.push_back( "Vehicle" );
+    centralBodies.push_back( "Moon" );
 
-        // Define thrust functions
-        std::shared_ptr< LunarAscentThrustGuidance > thrustGuidance =
-                std::make_shared< LunarAscentThrustGuidance >(
-                    bodyMap.at( "Vehicle" ), initialTime, thrustParameters );
-        std::function< Eigen::Vector3d( const double ) > thrustDirectionFunction =
-                std::bind( &LunarAscentThrustGuidance::getCurrentThrustDirection, thrustGuidance, std::placeholders::_1 );
-        std::function< double( const double ) > thrustMagnitudeFunction =
-                std::bind( &LunarAscentThrustGuidance::getCurrentThrustMagnitude, thrustGuidance, std::placeholders::_1 );
+    // Create acceleration models and propagation settings.
+    basic_astrodynamics::AccelerationMap accelerationModelMap = createAccelerationModelsMap(
+                bodyMap, accelerationMap, bodiesToPropagate, centralBodies );
 
-        std::shared_ptr< ThrustDirectionGuidanceSettings > thrustDirectionGuidanceSettings =
-                std::make_shared< CustomThrustDirectionSettings >( thrustDirectionFunction );
-        std::shared_ptr< ThrustMagnitudeSettings > thrustMagnitudeSettings =
-                std::make_shared< FromFunctionThrustMagnitudeSettings >(
-                    thrustMagnitudeFunction, [ = ]( const double ){ return constantSpecificImpulse; } );
-
-        // Define acceleration settings
-        SelectedAccelerationMap accelerationMap;
-        std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfVehicle;
-        accelerationsOfVehicle[ "Moon" ].push_back( std::make_shared< AccelerationSettings >(
-                                                        basic_astrodynamics::central_gravity ) );
-        accelerationsOfVehicle[ "Vehicle" ].push_back( std::make_shared< ThrustAccelerationSettings >(
-                                                           thrustDirectionGuidanceSettings, thrustMagnitudeSettings ) );
-        accelerationMap[ "Vehicle" ] = accelerationsOfVehicle;
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////             CREATE PROPAGATION SETTINGS            ////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-        // Define propagator settings variables.
-        std::vector< std::string > bodiesToPropagate;
-        std::vector< std::string > centralBodies;
-        bodiesToPropagate.push_back( "Vehicle" );
-        centralBodies.push_back( "Moon" );
+    // Convert the state to the global (inertial) frame.
+    std::shared_ptr< ephemerides::RotationalEphemeris > moonRotationalEphemeris =
+            bodyMap.at( "Moon" )->getRotationalEphemeris( );
+    Eigen::VectorXd systemInitialState = transformStateToGlobalFrame(
+                bodyFixedSystemInitialState, initialTime, moonRotationalEphemeris );
 
-        // Create acceleration models and propagation settings.
-        basic_astrodynamics::AccelerationMap accelerationModelMap = createAccelerationModelsMap(
-                    bodyMap, accelerationMap, bodiesToPropagate, centralBodies );
+    // Create termination settings.
+    std::vector< std::shared_ptr< PropagationTerminationSettings > > terminationSettingsList;
+    terminationSettingsList.push_back( std::make_shared< PropagationTimeTerminationSettings >(
+                                           initialTime + maximumDuration ) );
+    terminationSettingsList.push_back( std::make_shared< PropagationDependentVariableTerminationSettings >(
+                                           std::make_shared< SingleDependentVariableSaveSettings >(
+                                               altitude_dependent_variable, "Vehicle", "Moon" ), terminationAltitude, false ) );
+    terminationSettingsList.push_back( std::make_shared< PropagationDependentVariableTerminationSettings >(
+                                           std::make_shared< SingleDependentVariableSaveSettings >(
+                                               altitude_dependent_variable, "Vehicle", "Moon" ), 0.0, true ) );
+    terminationSettingsList.push_back( std::make_shared< PropagationDependentVariableTerminationSettings >(
+                                           std::make_shared< SingleDependentVariableSaveSettings >(
+                                               current_body_mass_dependent_variable, "Vehicle" ), vehicleDryMass, true ) );
+    std::shared_ptr< PropagationTerminationSettings > terminationSettings = std::make_shared<
+            PropagationHybridTerminationSettings >( terminationSettingsList, true );
 
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////             CREATE PROPAGATION SETTINGS            ////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Define dependent variables
+    std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariablesList;
+    dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
+                                          altitude_dependent_variable, "Vehicle", "Moon" ) );
+    dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
+                                          relative_speed_dependent_variable, "Vehicle", "Moon" ) );
+    dependentVariablesList.push_back( std::make_shared< BodyAerodynamicAngleVariableSaveSettings >(
+                                          "Vehicle", flight_path_angle ) );
 
+    std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave =
+            std::make_shared< DependentVariableSaveSettings >( dependentVariablesList );
 
-        // Convert the state to the global (inertial) frame.
-        std::shared_ptr< ephemerides::RotationalEphemeris > moonRotationalEphemeris =
-                bodyMap.at( "Moon" )->getRotationalEphemeris( );
-        Eigen::VectorXd systemInitialState = transformStateToGlobalFrame(
-                    bodyFixedSystemInitialState, initialTime, moonRotationalEphemeris );
+    // Define translational state propagation settings
+    std::shared_ptr< TranslationalStatePropagatorSettings< double > > translationalStatePropagatorSettings =
+            std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                centralBodies, accelerationModelMap, bodiesToPropagate, systemInitialState,
+                terminationSettings );
 
-        // Create termination settings.
-        std::vector< std::shared_ptr< PropagationTerminationSettings > > terminationSettingsList;
-        terminationSettingsList.push_back( std::make_shared< PropagationTimeTerminationSettings >(
-                                               initialTime + maximumDuration ) );
-        terminationSettingsList.push_back( std::make_shared< PropagationDependentVariableTerminationSettings >(
-                                               std::make_shared< SingleDependentVariableSaveSettings >(
-                                                   altitude_dependent_variable, "Vehicle", "Moon" ), terminationAltitude, false ) );
-        terminationSettingsList.push_back( std::make_shared< PropagationDependentVariableTerminationSettings >(
-                                               std::make_shared< SingleDependentVariableSaveSettings >(
-                                                   altitude_dependent_variable, "Vehicle", "Moon" ), 0.0, true ) );
-        terminationSettingsList.push_back( std::make_shared< PropagationDependentVariableTerminationSettings >(
-                                               std::make_shared< SingleDependentVariableSaveSettings >(
-                                                   current_body_mass_dependent_variable, "Vehicle" ), vehicleDryMass, true ) );
-        std::shared_ptr< PropagationTerminationSettings > terminationSettings = std::make_shared<
-                PropagationHybridTerminationSettings >( terminationSettingsList, true );
+    // Define mass propagation settings
+    std::map< std::string, std::shared_ptr< basic_astrodynamics::MassRateModel > > massRateModels;
+    massRateModels[ "Vehicle" ] = (
+                createMassRateModel( "Vehicle", std::make_shared< FromThrustMassModelSettings >( 1 ),
+                                     bodyMap, accelerationModelMap ) );
+    std::shared_ptr< MassPropagatorSettings< double > > massPropagatorSettings =
+            std::make_shared< MassPropagatorSettings< double > >(
+                std::vector< std::string >{ "Vehicle" }, massRateModels,
+                ( Eigen::Matrix< double, 1, 1 >( ) << vehicleMass ).finished( ), terminationSettings );
 
-        // Define dependent variables
-        std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariablesList;
-        dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
-                                              altitude_dependent_variable, "Vehicle", "Moon" ) );
-        dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
-                                              relative_speed_dependent_variable, "Vehicle", "Moon" ) );
-        dependentVariablesList.push_back( std::make_shared< BodyAerodynamicAngleVariableSaveSettings >(
-                                              "Vehicle", flight_path_angle ) );
+    // Define full propagation settings
+    std::vector< std::shared_ptr< SingleArcPropagatorSettings< double > > > propagatorSettingsVector =
+    { translationalStatePropagatorSettings, massPropagatorSettings };
+    std::shared_ptr< PropagatorSettings< double > > propagatorSettings =
+            std::make_shared< MultiTypePropagatorSettings< double > >(
+                propagatorSettingsVector, terminationSettings, dependentVariablesToSave );
 
-        std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave =
-                std::make_shared< DependentVariableSaveSettings >( dependentVariablesList );
+    // Define integration settings
+    std::shared_ptr< IntegratorSettings< > > integratorSettings =
+            std::make_shared< IntegratorSettings< > >( rungeKutta4, initialTime, 1.0 );
 
-        // Define translational state propagation settings
-        std::shared_ptr< TranslationalStatePropagatorSettings< double > > translationalStatePropagatorSettings =
-                std::make_shared< TranslationalStatePropagatorSettings< double > >(
-                    centralBodies, accelerationModelMap, bodiesToPropagate, systemInitialState,
-                    terminationSettings );
-
-        // Define mass propagation settings
-        std::map< std::string, std::shared_ptr< basic_astrodynamics::MassRateModel > > massRateModels;
-        massRateModels[ "Vehicle" ] = (
-                    createMassRateModel( "Vehicle", std::make_shared< FromThrustMassModelSettings >( 1 ),
-                                         bodyMap, accelerationModelMap ) );
-        std::shared_ptr< MassPropagatorSettings< double > > massPropagatorSettings =
-                std::make_shared< MassPropagatorSettings< double > >(
-                    std::vector< std::string >{ "Vehicle" }, massRateModels,
-                    ( Eigen::Matrix< double, 1, 1 >( ) << vehicleMass ).finished( ), terminationSettings );
-
-        // Define full propagation settings
-        std::vector< std::shared_ptr< SingleArcPropagatorSettings< double > > > propagatorSettingsVector =
-        { translationalStatePropagatorSettings, massPropagatorSettings };
-        std::shared_ptr< PropagatorSettings< double > > propagatorSettings =
-                std::make_shared< MultiTypePropagatorSettings< double > >(
-                    propagatorSettingsVector, terminationSettings, dependentVariablesToSave );
-
-        // Define integration settings
-        std::shared_ptr< IntegratorSettings< > > integratorSettings =
-                std::make_shared< IntegratorSettings< > >( rungeKutta4, initialTime, 1.0 );
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////             PROPAGATE ORBIT            ////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////             PROPAGATE ORBIT            ////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-        // Create simulation object and propagate dynamics.
-        SingleArcDynamicsSimulator< > dynamicsSimulator(
-                    bodyMap, integratorSettings, propagatorSettings );
+    // Create simulation object and propagate dynamics.
+    SingleArcDynamicsSimulator< > dynamicsSimulator(
+                bodyMap, integratorSettings, propagatorSettings );
 
-        std::map< double, Eigen::VectorXd > propagatedStateHistory = dynamicsSimulator.getEquationsOfMotionNumericalSolution( );
-        std::map< double, Eigen::VectorXd > dependentVariableHistory = dynamicsSimulator.getDependentVariableHistory( );
+    std::map< double, Eigen::VectorXd > propagatedStateHistory = dynamicsSimulator.getEquationsOfMotionNumericalSolution( );
+    std::map< double, Eigen::VectorXd > dependentVariableHistory = dynamicsSimulator.getDependentVariableHistory( );
 
-        input_output::writeDataMapToTextFile( propagatedStateHistory, "stateHistory" + std::to_string( i ) + ".dat", outputPath );
-        input_output::writeDataMapToTextFile( dependentVariableHistory, "dependentVariables" + std::to_string( i ) + ".dat", outputPath );
-        input_output::writeMatrixToFile( utilities::convertStlVectorToEigenVector(
-                                             thrustParameters ), "thrustParameters" + std::to_string( i ) + ".dat", 16, outputPath );
+    input_output::writeDataMapToTextFile( propagatedStateHistory, "stateHistory.dat", outputPath );
+    input_output::writeDataMapToTextFile( dependentVariableHistory, "dependentVariables.dat", outputPath );
+    input_output::writeMatrixToFile( utilities::convertStlVectorToEigenVector(
+                                         thrustParameters ), "thrustParameters.dat", 16, outputPath );
 
-    }
     // The exit code EXIT_SUCCESS indicates that the program was successfully executed.
     return EXIT_SUCCESS;
 }
