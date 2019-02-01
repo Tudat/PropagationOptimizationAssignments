@@ -129,7 +129,7 @@ public:
     //! Constructor
     CapsuleAerodynamicGuidance(
             const NamedBodyMap bodyMap,
-            const double fixedAngleOfAttack ):bodyMap_( bodyMap )
+            const double fixedAngleOfAttack ):bodyMap_( bodyMap ), fixedAngleOfAttack_( fixedAngleOfAttack )
     {
 
     }
