@@ -237,7 +237,9 @@ int main( )
     setGlobalFrameBodyEphemerides( bodyMap, "Earth", "J2000" );
 
     // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    std::vector< double > shapeParameters;
+    std::vector< double > shapeParameters =
+    { 8.148730872315355, 2.720324489288032, 0.2270385167794302, -0.4037530896422072, 0.2781438040896319, 0.4559143679738996 };
+
 
     double limitLength =
             ( shapeParameters[ 1 ] - shapeParameters[ 4 ] * ( 1.0 - std::cos( shapeParameters[ 3 ] ) ) ) /

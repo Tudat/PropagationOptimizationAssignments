@@ -109,7 +109,13 @@ int main( )
     { { "Earth", "Earth" }, { "Earth", "Mars" }, { "Venus", "Earth" }, { "Venus", "Mars" } };
 
     // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    std::vector< double > trajectoryIndependentVariables;
+    std::vector< double > trajectoryIndependentVariables =
+    { 1924.462642163688 * physical_constants::JULIAN_DAY,
+      249.1288987211842 * physical_constants::JULIAN_DAY,
+      126.0098895073786 * physical_constants::JULIAN_DAY,
+      296.5679894139201 * physical_constants::JULIAN_DAY,
+      747.223383212001 * physical_constants::JULIAN_DAY };
+
     trajectoryIndependentVariables.push_back( 0 );
     int transferCase = 0;
 
@@ -169,6 +175,8 @@ int main( )
     trajectory.calculateTrajectory( totalDeltaV );
     double captureDeltaV;
     trajectory.getCaptureDeltaV( captureDeltaV );
+
+    std::cout<<totalDeltaV<<" "<<captureDeltaV<<std::endl;
 
     // Retrieve times, positions, and delta V at each maneuver
     std::vector < Eigen::Vector3d > positionVector;

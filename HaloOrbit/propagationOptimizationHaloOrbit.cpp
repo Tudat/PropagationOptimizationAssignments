@@ -94,7 +94,10 @@ int main( )
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    Eigen::Vector6d normalizedInitialState;
+    Eigen::Vector6d normalizedInitialState =
+    { 1.008302585089232e+00,    0.000000000000000e+00,    8.458367411911102e-04,
+      0.000000000000000e+00,    1.001932775710728e-02,    0.000000000000000e+00  };
+
 
     // CR3BP geometry and configuration settings
     double primarySecondaryDistance = tudat::physical_constants::ASTRONOMICAL_UNIT;
