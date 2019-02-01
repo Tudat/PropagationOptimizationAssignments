@@ -31,15 +31,11 @@ using namespace tudat;
 //! Function that creates an aerodynamic database for a capsule, based on a set of shape parameters
 //! (see main function documentation)
 std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInterface(
-        const std::vector< double > shapeParameters,
+        const std::shared_ptr< geometric_shapes::Capsule > capsule,
+        const std::string directory,
+        const std::string filePrefix,
         const bool useNewtonianMethodForAllPanels = true )
 {
-
-    // Create capsule.
-    std::shared_ptr< geometric_shapes::Capsule > capsule
-            = std::make_shared< geometric_shapes::Capsule >(
-                shapeParameters[ 0 ], shapeParameters[ 1 ], shapeParameters[ 2 ],
-            shapeParameters[ 3 ], shapeParameters[ 4 ] );
 
     // Define geometry settings
     std::vector< int > numberOfLines;
@@ -53,7 +49,7 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
     numberOfLines[ 1 ] = 31;
     numberOfPoints[ 1 ] = 31;
     numberOfLines[ 2 ] = 31;
-    numberOfPoints[ 2 ] = 10;
+    numberOfPoints[ 2 ] = 31;
     numberOfLines[ 3 ] = 11;
     numberOfPoints[ 3 ] = 11;
     invertOrders[ 0 ] = 0;
@@ -109,17 +105,17 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
         selectedMethods[ 1 ][ 3 ] = 0;
     }
 
+    std::shared_ptr< HypersonicLocalInclinationAnalysis > hypersonicLocalInclinationAnalysis =
+            std::make_shared< HypersonicLocalInclinationAnalysis >(
+                    independentVariableDataPoints, capsule, numberOfLines, numberOfPoints,
+                    invertOrders, selectedMethods, PI * std::pow( capsule->getMiddleRadius( ), 2.0 ),
+                    capsule->getMiddleRadius( ), momentReference, false );
+
     aerodynamics::saveVehicleMeshToFile(
-                std::make_shared< HypersonicLocalInclinationAnalysis >(
-                                independentVariableDataPoints, capsule, numberOfLines, numberOfPoints,
-                                invertOrders, selectedMethods, PI * std::pow( capsule->getMiddleRadius( ), 2.0 ),
-                                3.9116, momentReference ) );
+                hypersonicLocalInclinationAnalysis, directory, filePrefix );
 
     // Create analysis object and capsule database.
-    return std::make_shared< HypersonicLocalInclinationAnalysis >(
-                independentVariableDataPoints, capsule, numberOfLines, numberOfPoints,
-                invertOrders, selectedMethods, PI * std::pow( capsule->getMiddleRadius( ), 2.0 ),
-                3.9116, momentReference );
+    return  hypersonicLocalInclinationAnalysis;
 }
 
 namespace tudat
@@ -132,7 +128,8 @@ public:
 
     //! Constructor
     CapsuleAerodynamicGuidance(
-            const NamedBodyMap bodyMap ):bodyMap_( bodyMap )
+            const NamedBodyMap bodyMap,
+            const double fixedAngleOfAttack ):bodyMap_( bodyMap )
     {
 
     }
@@ -140,16 +137,19 @@ public:
     //! The aerodynamic angles are to be computed here
     void updateGuidance( const double time )
     {
-        currentAngleOfAttack_ = 10.0 * mathematical_constants::PI / 180.0;
+        currentAngleOfAttack_ = fixedAngleOfAttack_;
         currentAngleOfSideslip_ = 0.0;
         currentBankAngle_ = 0.0;
-         std::cout<<bodyMap_.at( "Capsule" )->getAerodynamicCoefficientInterface( )->getCurrentForceCoefficients( ).transpose( )<<std::endl;
 
     }
 
 private:
 
+    //! List of body objects that constitute the environment
     NamedBodyMap bodyMap_;
+
+    //! Fixed angle of attack that is to be used by vehicle
+    double fixedAngleOfAttack_;
 };
 
 }
@@ -171,7 +171,7 @@ private:
  *   Input parameters:
  *
  *   shapeParameters: A vector defining the shape of the capsule as follows: Nose radius, Middle radius, Rear length, Rear angle
- *      Side radius (see Dirkx and Mooij, 2018 for more details)
+ *      Side radius, Constant Angle of Attack (see Dirkx and Mooij, 2018 for more details)
  *
  */
 //! Execute propagation of orbits of Capsule during entry.
@@ -189,7 +189,8 @@ int main( )
     ///////////////////////            SIMULATION SETTINGS            /////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    double vehicleMass = 5.0E3;
+
+    double vehicleDensity = 250.0;
 
     // Set spherical elements for Capsule.
     Eigen::Vector6d capsuleSphericalEntryState;
@@ -199,9 +200,9 @@ int main( )
             unit_conversions::convertDegreesToRadians( 0.0 );
     capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::longitudeIndex ) =
             unit_conversions::convertDegreesToRadians( 68.75 );
-    capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::speedIndex ) = 7.5E3;
+    capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::speedIndex ) = 7.83E3;
     capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::flightPathIndex ) =
-            unit_conversions::convertDegreesToRadians( -0.9 );
+            unit_conversions::convertDegreesToRadians( -1.5 );
     capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::headingAngleIndex ) =
             unit_conversions::convertDegreesToRadians( 34.37 );
 
@@ -210,7 +211,8 @@ int main( )
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     std::vector< std::pair< double, double > > thrustParametersLimits =
-    { { 3.5, 10.0 }, { 2.0, 3.0}, { 0.1, 5.0 }, { -70.0 * PI / 180.0, -10.0 * PI / 180.0 }, { 0.01, 0.5 } };
+    { { 3.5, 10.0 }, { 2.0, 3.0 }, { 0.1, 5.0 }, { -55.0 * PI / 180.0, -10.0 * PI / 180.0 }, { 0.01, 0.5 },
+      { 0.0, 30.0 * PI / 2.0 } };
 
     std::vector< std::function< double( ) > > parameterMonteCarloFunctions;
     for( int i = 0; i < thrustParametersLimits.size( ); i++ )
@@ -244,14 +246,11 @@ int main( )
     ///////////////////////             CREATE VEHICLE            /////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    for( int i = 0; i < 1; i++ )
+    for( int i = 0; i < 1000; i++ )
     {
 
         // Create vehicle objects.
         bodyMap[ "Capsule" ] = std::make_shared< simulation_setup::Body >( );
-        bodyMap[ "Capsule" ]->setConstantBodyMass( vehicleMass );
-
-
 
         // Finalize body creation.
         setGlobalFrameBodyEphemerides( bodyMap, "Earth", "J2000" );
@@ -261,7 +260,7 @@ int main( )
 
         std::cout<<i<<std::endl;
         std::vector< double > shapeParameters;
-        for( int j = 0; j < parameterMonteCarloFunctions.size( ); j++ )
+        for( unsigned int j = 0; j < parameterMonteCarloFunctions.size( ); j++ )
         {
             shapeParameters.push_back( parameterMonteCarloFunctions.at( j )( ) );
         }
@@ -269,18 +268,24 @@ int main( )
         double limitLength =
                 ( shapeParameters[ 1 ] - shapeParameters[ 4 ] * ( 1.0 - std::cos( shapeParameters[ 3 ] ) ) ) /
              std::tan( -shapeParameters[ 3 ] );
-        std::cout<<"Shape: "<<shapeParameters[ 0 ]<<" "<<shapeParameters[ 1 ]<<" "<<shapeParameters[ 2 ]<<" "<<
-                   shapeParameters[ 3 ]<<" "<<shapeParameters[ 4 ]<<" "<<limitLength<<std::endl;
-//        if( shapeParameters[ 2 ] >= limitLength - 0.01 )
-//        {
-//            shapeParameters[ 2 ] = limitLength -0.01;
-//        }
+        if( shapeParameters[ 2 ] >= limitLength - 0.01 )
+        {
+            shapeParameters[ 2 ] = limitLength -0.01;
+        }
 
-        //        Nose radius, Middle radius, Rear length, Rear angle, Side radius
+        // Create capsule.
+        std::shared_ptr< geometric_shapes::Capsule > capsule
+                = std::make_shared< geometric_shapes::Capsule >(
+                    shapeParameters[ 0 ], shapeParameters[ 1 ], shapeParameters[ 2 ],
+                shapeParameters[ 3 ], shapeParameters[ 4 ] );
+
+        bodyMap[ "Capsule" ]->setConstantBodyMass(
+                    capsule->getVolume( ) * vehicleDensity );
 
         // Create vehicle aerodynamic coefficients
         bodyMap[ "Capsule" ]->setAerodynamicCoefficientInterface(
-                    getCapsuleCoefficientInterface( shapeParameters, true ) );
+                    getCapsuleCoefficientInterface( capsule, outputPath,
+                                                    "output_" + std::to_string( i ) + "_", true ) );
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
@@ -305,7 +310,7 @@ int main( )
                     bodyMap, accelerationMap, bodiesToPropagate, centralBodies );
 
         std::shared_ptr< CapsuleAerodynamicGuidance > capsuleGuidance =
-                std::make_shared< CapsuleAerodynamicGuidance >( bodyMap );
+                std::make_shared< CapsuleAerodynamicGuidance >( bodyMap, shapeParameters.at( 5 ) );
         setGuidanceAnglesFunctions( capsuleGuidance, bodyMap.at( "Capsule" ) );
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -326,9 +331,10 @@ int main( )
         std::shared_ptr< SingleDependentVariableSaveSettings > terminationDependentVariable =
                 std::make_shared< SingleDependentVariableSaveSettings >( altitude_dependent_variable, "Capsule", "Earth" );
         terminationSettingsList.push_back(
-                    std::make_shared< PropagationDependentVariableTerminationSettings >( terminationDependentVariable, 25.0E3, true ) );
+                    std::make_shared< PropagationDependentVariableTerminationSettings >(
+                        terminationDependentVariable, 25.0E3, true ) );
         terminationSettingsList.push_back( std::make_shared< PropagationTimeTerminationSettings >(
-                                               3600.0 ) );
+                                               24.0 * 3600.0 ) );
         std::shared_ptr< PropagationTerminationSettings > terminationSettings = std::make_shared<
                 PropagationHybridTerminationSettings >( terminationSettingsList, true );
 
@@ -368,7 +374,6 @@ int main( )
         input_output::writeDataMapToTextFile( propagatedStateHistory, "stateHistory" + std::to_string( i ) + ".dat", outputPath );
         input_output::writeDataMapToTextFile( dependentVariableHistory, "dependentVariables" +  std::to_string( i ) + ".dat", outputPath );
 
-        sleep( 1.0 );
     }
     // The exit code EXIT_SUCCESS indicates that the program was successfully executed.
     return EXIT_SUCCESS;

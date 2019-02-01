@@ -19,14 +19,17 @@ using namespace tudat::orbital_element_conversions;
 using namespace tudat:: propagators;
 
 //! Create accelerations, to be used in full numerical simulation
-SelectedAccelerationMap getHaloOrbitBodyMap( )
+SelectedAccelerationMap getHaloOrbitAccelerationsMap( )
 {
     SelectedAccelerationMap accelerationSettingsMap;
     accelerationSettingsMap[ "Spacecraft" ][ "Earth" ].push_back( std::make_shared< simulation_setup::AccelerationSettings >(
                                                                       basic_astrodynamics::central_gravity ) );
     accelerationSettingsMap[ "Spacecraft" ][ "Sun" ].push_back( std::make_shared< simulation_setup::AccelerationSettings >(
                                                                     basic_astrodynamics::central_gravity ) );
-
+    accelerationSettingsMap[ "Spacecraft" ][ "Mars" ].push_back( std::make_shared< simulation_setup::AccelerationSettings >(
+                                                                     basic_astrodynamics::central_gravity ) );
+    accelerationSettingsMap[ "Spacecraft" ][ "Jupiter" ].push_back( std::make_shared< simulation_setup::AccelerationSettings >(
+                                                                        basic_astrodynamics::central_gravity ) );
     return accelerationSettingsMap;
 }
 
@@ -41,6 +44,8 @@ NamedBodyMap getHaloOrbitBodyMap(
     std::map< std::string, std::shared_ptr< simulation_setup::BodySettings > > bodySettings = setupBodySettingsCR3BP(
                 primarySecondaryDistance,
                 "Sun", "Earth", "ECLIPJ2000", primaryGravitationalParameter, secondaryGravitationalParameter );
+    bodySettings[ "Mars" ] = simulation_setup::getDefaultSingleBodySettings( "Mars", TUDAT_NAN, TUDAT_NAN, TUDAT_NAN );
+    bodySettings[ "Jupiter" ] = simulation_setup::getDefaultSingleBodySettings( "Jupiter", TUDAT_NAN, TUDAT_NAN, TUDAT_NAN );
 
     simulation_setup::NamedBodyMap bodyMap = createBodies( bodySettings );
     bodyMap[ nameBodyToPropagate ] = std::make_shared< simulation_setup::Body >( );
@@ -86,125 +91,165 @@ int main( )
     ///////////////////////        ORBIT SETTINGS                 /////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    Eigen::Vector6d normalizedInitialState;
-    normalizedInitialState <<  1.008381226326397e+00,    0.000000000000000e+00,    1.000000000000000e-04,
-            0.000000000000000e+00,    9.755309237585266e-03,    0.000000000000000e+00  ;
+    Eigen::MatrixXd initialConditionsList = input_output::readMatrixFromFile(
+                "/home/dominic/Software/tudatBundleTest/tudatBundle/tudatApplications/PropagationOptimizationAssignments/HaloOrbit/L2_2_initial_conditions_ES.txt" );
 
-    double primarySecondaryDistance = tudat::physical_constants::ASTRONOMICAL_UNIT;
-    double primaryGravitationalParameter = simulation_setup::createGravityFieldModel(
-           simulation_setup::getDefaultGravityFieldSettings( "Sun", TUDAT_NAN, TUDAT_NAN ),
-            "Sun" )->getGravitationalParameter( );
-    double secondaryGravitationalParameter = simulation_setup::createGravityFieldModel(
-            simulation_setup::getDefaultGravityFieldSettings( "Earth", TUDAT_NAN, TUDAT_NAN ),
-            "Earth" )->getGravitationalParameter( );
+    std::cout<<"Size: "<<initialConditionsList.rows( )<<" "<<initialConditionsList.cols( )<<std::endl;
 
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////        OUTPUT MAPS                 ////////////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    // State history propagated in CR3BP, unnormalized and transformed to inertial Cartesian states
-    std::map< double, Eigen::Vector6d > unnormalizedCr3bpStateHistory;
-
-    // State history propagated in CR3BP, normalized and corotating
-    std::map< double, Eigen::Vector6d > cr3bpStateHistory;
-
-    // State history numerically propagated in full dynamical model, in inertial Cartesian states
-    std::map< double, Eigen::VectorXd > propagatedStateHistory;
-
-    // State history numerically propagated in full dynamical model, converted to normalized and corotating coordinates
-    std::map< double, Eigen::VectorXd > normalizedPropagatedStateHistory;
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////        CREATE ENVIRONMENT                 /////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    double initialPropagationTime = 0.0;
-    double finalPropagationTime = 0.5 * tudat::physical_constants::JULIAN_YEAR;
-    double integrationTimeStep = 1000.0;
-
-    NamedBodyMap bodyMap = getHaloOrbitBodyMap(
-                primarySecondaryDistance, primaryGravitationalParameter, secondaryGravitationalParameter, "Spacecraft" );
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////  PROPAGATE ORBIT NUMERICALLY IN CR3BP                //////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    double dimensionLessTimeStep =
-            circular_restricted_three_body_problem::convertDimensionalTimeToDimensionlessTime(
-                integrationTimeStep, primaryGravitationalParameter, secondaryGravitationalParameter,
-                primarySecondaryDistance );
-    double dimensionLessFinalTime = circular_restricted_three_body_problem::convertDimensionalTimeToDimensionlessTime(
-                finalPropagationTime, primaryGravitationalParameter, secondaryGravitationalParameter,
-                primarySecondaryDistance );
-    double massParameter =
-            circular_restricted_three_body_problem::computeMassParameter(
-                primaryGravitationalParameter, secondaryGravitationalParameter );
-
-    cr3bpStateHistory = performCR3BPIntegration(
-                std::make_shared < numerical_integrators::IntegratorSettings < > >
-                ( numerical_integrators::rungeKutta4, initialPropagationTime, dimensionLessTimeStep ),
-                massParameter,  normalizedInitialState, dimensionLessFinalTime, true );
-
-    for( auto stateIterator : cr3bpStateHistory )
+    for( int i = 0; i < initialConditionsList.rows( ); i++ )
     {
-        unnormalizedCr3bpStateHistory[ circular_restricted_three_body_problem::convertDimensionlessTimeToDimensionalTime(
-                    stateIterator.first, primaryGravitationalParameter, secondaryGravitationalParameter,
-                    primarySecondaryDistance ) ] =
-                circular_restricted_three_body_problem::convertCorotatingNormalizedToCartesianCoordinates(
-                    secondaryGravitationalParameter, primaryGravitationalParameter,
-                    primarySecondaryDistance, stateIterator.second, stateIterator.first );
+        std::cout<<i<<std::endl;
+        // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
+        Eigen::Vector6d normalizedInitialState =
+                initialConditionsList.block( i, 1, 1, 6 ).transpose( );
+
+        double primarySecondaryDistance = tudat::physical_constants::ASTRONOMICAL_UNIT;
+        double primaryGravitationalParameter = simulation_setup::createGravityFieldModel(
+                    simulation_setup::getDefaultGravityFieldSettings( "Sun", TUDAT_NAN, TUDAT_NAN ),
+                    "Sun" )->getGravitationalParameter( );
+        double secondaryGravitationalParameter = simulation_setup::createGravityFieldModel(
+                    simulation_setup::getDefaultGravityFieldSettings( "Earth", TUDAT_NAN, TUDAT_NAN ),
+                    "Earth" )->getGravitationalParameter( );
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////        CREATE ENVIRONMENT                 /////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        double initialTotalPropagationTime = 0.0 * tudat::physical_constants::JULIAN_YEAR;
+        double finalTotalPropagationTime = 2.0 * tudat::physical_constants::JULIAN_YEAR;
+        double integrationTimeStep = 1.0E3;
+
+        int numberOfArcs = 12;
+        double arcDuration = ( finalTotalPropagationTime - initialTotalPropagationTime ) /
+                static_cast< double >( numberOfArcs );
+
+        NamedBodyMap bodyMap = getHaloOrbitBodyMap(
+                    primarySecondaryDistance, primaryGravitationalParameter, secondaryGravitationalParameter, "Spacecraft" );
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////  PROPAGATE ORBIT NUMERICALLY IN CR3BP                //////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        Eigen::VectorXd currentNormalizedInitialState = normalizedInitialState;
+
+        for( int j = 0; j < numberOfArcs; j++ )
+        {
+
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            ///////////////////////        OUTPUT MAPS                 ////////////////////////////////////////////////////////////
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            // State history propagated in CR3BP, unnormalized and transformed to inertial Cartesian states
+            std::map< double, Eigen::Vector6d > unnormalizedCr3bpStateHistory;
+
+            // State history propagated in CR3BP, normalized and corotating
+            std::map< double, Eigen::Vector6d > cr3bpStateHistory;
+
+            // State history numerically propagated in full dynamical model, in inertial Cartesian states
+            std::map< double, Eigen::VectorXd > propagatedStateHistory;
+
+            // State history numerically propagated in full dynamical model, converted to normalized and corotating coordinates
+            std::map< double, Eigen::VectorXd > normalizedPropagatedStateHistory;
+
+            double initialPropagationTime = initialTotalPropagationTime +
+                    static_cast< double >( j ) * arcDuration;
+            double finalPropagationTime = initialTotalPropagationTime +
+                    static_cast< double >( j + 1 ) * arcDuration;
+
+            std::cout<<j<<" "<<initialPropagationTime<<" "<<finalPropagationTime<<std::endl;
+
+            double dimensionLessTimeStep =
+                    circular_restricted_three_body_problem::convertDimensionalTimeToDimensionlessTime(
+                        integrationTimeStep, primaryGravitationalParameter, secondaryGravitationalParameter,
+                        primarySecondaryDistance );
+            double dimensionLessInitialTime = circular_restricted_three_body_problem::convertDimensionalTimeToDimensionlessTime(
+                        initialPropagationTime, primaryGravitationalParameter, secondaryGravitationalParameter,
+                        primarySecondaryDistance );
+            double dimensionLessFinalTime = circular_restricted_three_body_problem::convertDimensionalTimeToDimensionlessTime(
+                        finalPropagationTime, primaryGravitationalParameter, secondaryGravitationalParameter,
+                        primarySecondaryDistance );
+            double massParameter =
+                    circular_restricted_three_body_problem::computeMassParameter(
+                        primaryGravitationalParameter, secondaryGravitationalParameter );
+
+            cr3bpStateHistory = performCR3BPIntegration(
+                        std::make_shared < numerical_integrators::IntegratorSettings < > >
+                        ( numerical_integrators::rungeKutta4, dimensionLessInitialTime, dimensionLessTimeStep ),
+                        massParameter, currentNormalizedInitialState, dimensionLessFinalTime, true );
+
+            for( auto stateIterator : cr3bpStateHistory )
+            {
+                unnormalizedCr3bpStateHistory[ circular_restricted_three_body_problem::convertDimensionlessTimeToDimensionalTime(
+                            stateIterator.first, primaryGravitationalParameter, secondaryGravitationalParameter,
+                            primarySecondaryDistance ) ] =
+                        circular_restricted_three_body_problem::convertCorotatingNormalizedToCartesianCoordinates(
+                            secondaryGravitationalParameter, primaryGravitationalParameter,
+                            primarySecondaryDistance, stateIterator.second, stateIterator.first );
+            }
+
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            ///////////////////////  PROPAGATE ORBIT NUMERICALLY IN FULL SYSTEM                 ///////////////////////////////////
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            std::string centralBodyOfPropagation = "Sun";
+
+            SelectedAccelerationMap accelerationSettings  = getHaloOrbitAccelerationsMap( );
+            basic_astrodynamics::AccelerationMap accelerationModelMap = createAccelerationModelsMap(
+                        bodyMap, accelerationSettings, { "Spacecraft" }, { centralBodyOfPropagation } );
+
+            std::vector< std::string > centralBodies =  { centralBodyOfPropagation };
+            std::vector< std::string > bodiesToPropagate = { "Spacecraft" };
+
+            Eigen::Vector6d initialCartesianState =
+                    circular_restricted_three_body_problem::convertCorotatingNormalizedToCartesianCoordinates(
+                        secondaryGravitationalParameter, primaryGravitationalParameter,
+                        primarySecondaryDistance, currentNormalizedInitialState, dimensionLessInitialTime ) -
+                    bodyMap.at( centralBodyOfPropagation )->getEphemeris( )->getCartesianState( initialPropagationTime );
+
+            std::shared_ptr< TranslationalStatePropagatorSettings< double> > propagatorSettings =
+                    std::make_shared< TranslationalStatePropagatorSettings< double > >
+                    ( centralBodies, accelerationModelMap, bodiesToPropagate, initialCartesianState,
+                      std::make_shared< PropagationTimeTerminationSettings >( finalPropagationTime, true ) );
+
+            std::shared_ptr< numerical_integrators::IntegratorSettings< > > integratorSettings =
+                    std::make_shared < numerical_integrators::IntegratorSettings < > >
+                    ( numerical_integrators::rungeKutta4, initialPropagationTime, integrationTimeStep );
+
+            SingleArcDynamicsSimulator< > dynamicsSimulator = SingleArcDynamicsSimulator< >(
+                        bodyMap, integratorSettings, propagatorSettings );
+
+
+            std::map< double, Eigen::VectorXd > rawPropagatedStateHistory = dynamicsSimulator.getEquationsOfMotionNumericalSolution( );
+
+            for( auto stateIterator : rawPropagatedStateHistory )
+            {
+                propagatedStateHistory[ stateIterator.first ] = stateIterator.second +
+                        bodyMap.at( centralBodyOfPropagation )->getEphemeris( )->getCartesianState( stateIterator.first );
+
+                normalizedPropagatedStateHistory[ circular_restricted_three_body_problem::convertDimensionalTimeToDimensionlessTime(
+                            stateIterator.first, primaryGravitationalParameter, secondaryGravitationalParameter,
+                            primarySecondaryDistance ) ] =
+                        circular_restricted_three_body_problem::convertCartesianToCorotatingNormalizedCoordinates(
+                            secondaryGravitationalParameter, primaryGravitationalParameter,
+                            primarySecondaryDistance, propagatedStateHistory[ stateIterator.first ], stateIterator.first );
+            }
+
+            currentNormalizedInitialState = cr3bpStateHistory.rbegin( )->second;
+
+            input_output::writeDataMapToTextFile(
+                        unnormalizedCr3bpStateHistory, "cr3bpResultUnnormalized" + std::to_string( i ) +
+                        "_" + std::to_string( j ) + ".dat", outputPath );
+            input_output::writeDataMapToTextFile(
+                        cr3bpStateHistory, "cr3bpResultNormalized.dat" + std::to_string( i ) +
+                        "_" + std::to_string( j ) + ".dat", outputPath );
+            input_output::writeDataMapToTextFile(
+                        propagatedStateHistory, "numericalResultUnnormalized.dat" + std::to_string( i ) +
+                        "_" + std::to_string( j ) + ".dat", outputPath );
+            input_output::writeDataMapToTextFile(
+                        normalizedPropagatedStateHistory, "numericalResultNormalized.dat" + std::to_string( i ) +
+                        "_" + std::to_string( j ) + ".dat", outputPath );
+        }
     }
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////  PROPAGATE ORBIT NUMERICALLY IN FULL SYSTEM                 ///////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    std::string centralBodyOfPropagation = "SSB";
-
-    SelectedAccelerationMap accelerationSettings  = getHaloOrbitBodyMap( );
-    basic_astrodynamics::AccelerationMap accelerationModelMap = createAccelerationModelsMap(
-                bodyMap, accelerationSettings, { "Spacecraft" }, { centralBodyOfPropagation } );
-
-    std::vector< std::string > centralBodies =  { centralBodyOfPropagation };
-    std::vector< std::string > bodiesToPropagate = { "Spacecraft" };
-
-    Eigen::Vector6d initialCartesianState =
-            circular_restricted_three_body_problem::convertCorotatingNormalizedToCartesianCoordinates(
-                secondaryGravitationalParameter, primaryGravitationalParameter,
-                primarySecondaryDistance, normalizedInitialState, initialPropagationTime );
-
-    std::shared_ptr< TranslationalStatePropagatorSettings< double> > propagatorSettings =
-            std::make_shared< TranslationalStatePropagatorSettings< double > >
-            ( centralBodies, accelerationModelMap, bodiesToPropagate, initialCartesianState,
-              std::make_shared< PropagationTimeTerminationSettings >( finalPropagationTime, true ) );
-
-    std::shared_ptr< numerical_integrators::IntegratorSettings< > > integratorSettings =
-            std::make_shared < numerical_integrators::IntegratorSettings < > >
-            ( numerical_integrators::rungeKutta4, initialPropagationTime, integrationTimeStep );
-
-    SingleArcDynamicsSimulator< > dynamicsSimulator = SingleArcDynamicsSimulator< >(
-                bodyMap, integratorSettings, propagatorSettings );
-
-
-    dynamicsSimulator.getEquationsOfMotionNumericalSolution( );
-
-    for( auto stateIterator : propagatedStateHistory )
-    {
-        normalizedPropagatedStateHistory[ circular_restricted_three_body_problem::convertDimensionalTimeToDimensionlessTime(
-                    stateIterator.first, primaryGravitationalParameter, secondaryGravitationalParameter,
-                    primarySecondaryDistance ) ] =
-                circular_restricted_three_body_problem::convertCartesianToCorotatingNormalizedCoordinates(
-                    secondaryGravitationalParameter, primaryGravitationalParameter,
-                    primarySecondaryDistance, stateIterator.second, stateIterator.first );
-    }
-
-    input_output::writeDataMapToTextFile( unnormalizedCr3bpStateHistory, "cr3bpResultUnnormalized.dat", outputPath );
-    input_output::writeDataMapToTextFile( cr3bpStateHistory, "cr3bpResultNormalized.dat", outputPath );
-    input_output::writeDataMapToTextFile( propagatedStateHistory, "numericalResultUnnormalized.dat", outputPath );
-    input_output::writeDataMapToTextFile( normalizedPropagatedStateHistory, "numericalResultNormalized.dat", outputPath );
-
 
 
     // The exit code EXIT_SUCCESS indicates that the program was successfully executed.
