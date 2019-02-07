@@ -95,8 +95,8 @@ int main( )
 
     // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
     Eigen::Vector6d normalizedInitialState =
-    { 1.008302585089232e+00,    0.000000000000000e+00,    8.458367411911102e-04,
-      0.000000000000000e+00,    1.001932775710728e-02,    0.000000000000000e+00  };
+            ( Eigen::Vector6d( ) << 1.008302585089232e+00,    0.000000000000000e+00,    8.458367411911102e-04,
+              0.000000000000000e+00,    1.001932775710728e-02,    0.000000000000000e+00 ).finished( );
 
 
     // CR3BP geometry and configuration settings
@@ -241,16 +241,16 @@ int main( )
 
         input_output::writeDataMapToTextFile(
                     unnormalizedCr3bpStateHistory, "cr3bpResultUnnormalized"
-                    "_" + std::to_string( j ) + ".dat", outputPath );
+                                                   "_" + std::to_string( j ) + ".dat", outputPath );
         input_output::writeDataMapToTextFile(
                     cr3bpStateHistory, "cr3bpResultNormalized.dat"
-                    "_" + std::to_string( j ) + ".dat", outputPath );
+                                       "_" + std::to_string( j ) + ".dat", outputPath );
         input_output::writeDataMapToTextFile(
                     propagatedStateHistory, "numericalResultUnnormalized.dat"
-                    "_" + std::to_string( j ) + ".dat", outputPath );
+                                            "_" + std::to_string( j ) + ".dat", outputPath );
         input_output::writeDataMapToTextFile(
                     normalizedPropagatedStateHistory, "numericalResultNormalized.dat"
-                    "_" + std::to_string( j ) + ".dat", outputPath );
+                                                      "_" + std::to_string( j ) + ".dat", outputPath );
     }
 
     // The exit code EXIT_SUCCESS indicates that the program was successfully executed.

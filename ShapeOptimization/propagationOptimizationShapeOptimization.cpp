@@ -28,8 +28,14 @@ using namespace tudat::input_output;
 using namespace tudat::mathematical_constants;
 using namespace tudat;
 
-//! Function that creates an aerodynamic database for a capsule, based on a set of shape parameters
-//! (see main function documentation)
+/*!
+ *  Function that creates an aerodynamic database for a capsule, based on a set of shape parameters
+ *  The Capsule shape consists of four separate geometrical components: a sphere segment for the nose, a torus segment for the
+ *  shoulder/edge, a conical frustum for the rear body, and a sphere segment for the rear cap (see Dirkx and Mooij, 2016).
+ *  The code used in this function discretizes these surfaces into a structured mesh of quadrilateral panels. The parameters
+ *  numberOfPoints and numberOfLines define the number of discretization points (for each part) in both independent directions
+ *  (lengthwise and circumferential).
+ */
 std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInterface(
         const std::shared_ptr< geometric_shapes::Capsule > capsule,
         const std::string directory,
@@ -37,13 +43,11 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
         const bool useNewtonianMethodForAllPanels = true )
 {
 
-    // Define geometry settings
+    // Define settings for surface discretization of capsule
     std::vector< int > numberOfLines;
     std::vector< int > numberOfPoints;
-    std::vector< bool > invertOrders;
     numberOfLines.resize( 4 );
     numberOfPoints.resize( 4 );
-    invertOrders.resize( 4 );
     numberOfLines[ 0 ] = 31;
     numberOfPoints[ 0 ] = 31;
     numberOfLines[ 1 ] = 31;
@@ -52,6 +56,10 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
     numberOfPoints[ 2 ] = 31;
     numberOfLines[ 3 ] = 11;
     numberOfPoints[ 3 ] = 11;
+
+    // DO NOT CHANGE THESE (setting to true will turn parts of the vehicle 'inside out')
+    std::vector< bool > invertOrders;
+    invertOrders.resize( 4 );
     invertOrders[ 0 ] = 0;
     invertOrders[ 1 ] = 0;
     invertOrders[ 2 ] = 0;
@@ -105,12 +113,14 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
         selectedMethods[ 1 ][ 3 ] = 0;
     }
 
+    // Create aerodynamic database
     std::shared_ptr< HypersonicLocalInclinationAnalysis > hypersonicLocalInclinationAnalysis =
             std::make_shared< HypersonicLocalInclinationAnalysis >(
                 independentVariableDataPoints, capsule, numberOfLines, numberOfPoints,
                 invertOrders, selectedMethods, PI * std::pow( capsule->getMiddleRadius( ), 2.0 ),
                 capsule->getMiddleRadius( ), momentReference, false );
 
+    // Save vehicle mesh to a file
     aerodynamics::saveVehicleMeshToFile(
                 hypersonicLocalInclinationAnalysis, directory, filePrefix );
 
@@ -170,7 +180,8 @@ private:
  *
  *   Input parameters:
  *
- *   shapeParameters: A vector defining the shape of the capsule as follows: Nose radius, Middle radius, Rear length, Rear angle
+ *   shapeParameters: A vector defining the problem as follows (first five parameters describe shape; sixth paramater related
+ *      to guidance): Nose radius, Middle radius, Rear length, Rear angle
  *      Side radius, Constant Angle of Attack (see Dirkx and Mooij, 2018 for more details)
  *
  */

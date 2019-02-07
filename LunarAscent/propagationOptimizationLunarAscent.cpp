@@ -44,8 +44,10 @@ public:
      * Contructor
      * \param vehicleBody Body object for the ascent vehicle
      * \param initialTime Start time of the propagatiin
-     * \param parameterVector Vector of independent variables to be used for thrust parameterization
-     * (see main function documentation)
+     * \param parameterVector Vector of independent variables to be used for thrust parameterization:
+     *   - Entry 0: Constant thrust magnitude
+     *   - Entry 1: Constant spacing in time between nodes
+     *   - Entry 2-6: Thrust angle theta, at five nodes
      */
     LunarAscentThrustGuidance(
             const std::shared_ptr< Body > vehicleBody,
