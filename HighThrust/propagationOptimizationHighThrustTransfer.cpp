@@ -127,20 +127,13 @@ int main( )
     // Define settings for capture at target planet
     double captureSemiMajorAxis = 1.0895e8 / 0.02;
     double captureEccentricity = 0.98;
-
+    std::vector< double > departureCaptureSemiMajorAxes = { TUDAT_NAN, captureSemiMajorAxis };
+    std::vector< double > departureCaptureEccentricities = { TUDAT_NAN, captureEccentricity };
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////        SETUP SOLAR SYSTEM BODIES            ///////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Define body settings for simulation.
-    std::vector< std::string > bodiesToCreate;
-    bodiesToCreate.push_back( "Sun" );
-    bodiesToCreate.push_back( "Earth" );
-    bodiesToCreate.push_back( "Moon" );
-    bodiesToCreate.push_back( "Mars" );
-    bodiesToCreate.push_back( "Venus" );
-    bodiesToCreate.push_back( "Jupiter" );
-
+    // Create body map
     NamedBodyMap bodyMapForPatchedConic = setupBodyMapFromEphemeridesForPatchedConicsTrajectory(
                 "Sun", "Spacecraft", transferBodyOrder );
 
@@ -176,7 +169,7 @@ int main( )
     double captureDeltaV;
     trajectory.getCaptureDeltaV( captureDeltaV );
 
-    std::cout<<totalDeltaV<<" "<<captureDeltaV<<std::endl;
+    std::cout<<"Total/capture Delta V: "<<totalDeltaV<<" "<<captureDeltaV<<std::endl;
 
     // Retrieve times, positions, and delta V at each maneuver
     std::vector < Eigen::Vector3d > positionVector;
@@ -192,20 +185,64 @@ int main( )
     NamedBodyMap bodyMapForPropagation = bodyMapForPatchedConic;
 
     // Define acceleration settings
-    std::vector < basic_astrodynamics::AccelerationMap > accelerationMap =
+    std::vector< basic_astrodynamics::AccelerationMap > accelerationMap =
             getAccelerationModelsPerturbedPatchedConicsTrajectory(
                 transferLegTypes.size( ), "Sun", "Spacecraft", bodyMapForPropagation, transferBodyOrder );
+
+    // Define integrator settings
+    std::shared_ptr< numerical_integrators::IntegratorSettings < > > integratorSettings =
+            std::make_shared< numerical_integrators::IntegratorSettings < > > (
+                numerical_integrators::rungeKutta4, TUDAT_NAN, 1000.0 );
+
+    // Create list of dependent variables to save (distance to all flyby bodies and Sun)
+    std::vector< std::string > bodyList;
+    for( int i = 0; i < transferBodyOrder.size( ); i++ )
+    {
+        if( std::find( bodyList.begin( ), bodyList.end( ), transferBodyOrder.at( i ) ) ==
+                bodyList.end( ) )
+        {
+            bodyList.push_back( transferBodyOrder.at( i ) );
+        }
+    }
+    bodyList.push_back( "Sun" );
+
+    std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariableList;
+    for( unsigned int i = 0; i < bodyList.size( ); i++ )
+    {
+        dependentVariableList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
+                                             relative_distance_dependent_variable, "Spacecraft", bodyList.at( i ) ) );
+    }
+
+    // Save dependent variables for each propagation leg
+    std::vector< std::shared_ptr< DependentVariableSaveSettings > > dependentVariablesToSave;
+    for( unsigned int j = 0; j < transferBodyOrder.size( ); j++ )
+    {
+        dependentVariablesToSave.push_back( std::make_shared< DependentVariableSaveSettings >(
+                                                dependentVariableList ) );
+    }
+
+    // Define propagator type
+    TranslationalPropagatorType propagatorType = cowell;
+
+    // Create propagator settings for patched conic (per arc; backward and forward from arc midpoint)
+    // Propagation currently terminates on sphere of influence of body.
+    std::vector< std::pair< std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > >,
+            std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > > > propagatorSettings =
+            getPatchedConicPropagatorSettings(
+                bodyMapForPropagation, accelerationMap, transferBodyOrder, "Sun", "Spacecraft", transferLegTypes,
+                trajectoryIndependentVariables, minimumPericenterRadii, departureCaptureSemiMajorAxes,
+                departureCaptureEccentricities, dependentVariablesToSave, propagatorType, true );
 
     // Propagate full dynamics of problem
     std::map< int, std::map< double, Eigen::Vector6d > > lambertTargeterResultForEachLeg;
     std::map< int, std::map< double, Eigen::Vector6d > > fullProblemResultForEachLeg;
+    std::map< int, std::map< double, Eigen::VectorXd > > dependentVariableResultForEachLeg;
     fullPropagationPatchedConicsTrajectory(
-                bodyMapForPropagation, accelerationMap, transferBodyOrder,
-                "Sun", "Spacecraft", transferLegTypes, trajectoryIndependentVariables, minimumPericenterRadii,
-    { TUDAT_NAN, captureSemiMajorAxis }, { TUDAT_NAN, captureEccentricity },
-                std::make_shared < numerical_integrators::IntegratorSettings < > > (
-                    numerical_integrators::rungeKutta4, TUDAT_NAN, 1000.0 ), true,
-                lambertTargeterResultForEachLeg, fullProblemResultForEachLeg );
+                bodyMapForPropagation, transferBodyOrder,
+                "Sun", transferLegTypes, trajectoryIndependentVariables, minimumPericenterRadii,
+                departureCaptureSemiMajorAxes, departureCaptureEccentricities,
+                propagatorSettings, integratorSettings,
+                lambertTargeterResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg );
 
     // Write patched conic results to file for each leg
     for( auto resultIterator : lambertTargeterResultForEachLeg )
@@ -221,6 +258,15 @@ int main( )
 
         input_output::writeDataMapToTextFile(
                     resultIterator.second, "numericalResult" +
+                    std::to_string( resultIterator.first ) + ".dat", outputPath );
+    }
+
+    // Write numerical propagation results to file for each leg
+    for( auto resultIterator : dependentVariableResultForEachLeg )
+    {
+
+        input_output::writeDataMapToTextFile(
+                    resultIterator.second, "dependentResult" +
                     std::to_string( resultIterator.first ) + ".dat", outputPath );
     }
 
