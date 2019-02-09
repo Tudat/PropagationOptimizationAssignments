@@ -104,20 +104,15 @@ int main( )
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // Define different cases for 3rd and 4th body
-    std::vector< std::string > transferCases = { "EVEEJ", "EVEMJ", "EVVEJ", "EVVMJ" };
+    std::vector< std::string > transferCases = { "EVEEJ", "EVVEJ",  "EVEVJ", "EVVMJ", "EVEMJ", "EVMMJ", "EVMVJ"  };
     std::vector< std::pair< std::string, std::string > > transferCaseNames =
-    { { "Earth", "Earth" }, { "Earth", "Mars" }, { "Venus", "Earth" }, { "Venus", "Mars" } };
+    { { "Earth", "Earth" }, { "Venus", "Earth" }, { "Earth", "Venus" }, { "Venus", "Mars" }, { "Earth", "Mars" }, { "Mars", "Mars" }, { "Mars", "Venus" } };
 
     // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    std::vector< double > trajectoryIndependentVariables =
-    { 1924.462642163688 * physical_constants::JULIAN_DAY,
-      249.1288987211842 * physical_constants::JULIAN_DAY,
-      126.0098895073786 * physical_constants::JULIAN_DAY,
-      296.5679894139201 * physical_constants::JULIAN_DAY,
-      747.223383212001 * physical_constants::JULIAN_DAY };
+    std::vector< double > trajectoryParameters =
+    { -1851.46422926478,	 94.13188652993128,	 381.9429079287791,	 55.6729929900098,	 700.990295462437 , 1 };
 
-    trajectoryIndependentVariables.push_back( 0 );
-    int transferCase = 0;
+    int transferCase = trajectoryParameters.at( 5 );
 
     // Set body order (no DSM) for current settings
     std::vector< std::string > transferBodyOrder =
@@ -155,6 +150,15 @@ int main( )
     // Get list of minimum flyby periapsis radii
     std::vector< double > minimumPericenterRadii = getDefaultMinimumPericenterRadii(
                 transferBodyOrder );
+
+    std::vector< double > trajectoryIndependentVariables;
+    for( int i = 0; i < trajectoryParameters.size( ) - 1; i++ )
+    {
+        trajectoryIndependentVariables.push_back( trajectoryParameters.at( i ) * physical_constants::JULIAN_DAY );
+    }
+
+    // Add entry for interface consistency
+    trajectoryIndependentVariables.push_back( TUDAT_NAN );
 
     // Create patched conic calculation object (no numerical propagation; departure Delta V not included)
     transfer_trajectories::Trajectory trajectory = createTransferTrajectoryObject(
@@ -194,9 +198,9 @@ int main( )
             std::make_shared< numerical_integrators::IntegratorSettings < > > (
                 numerical_integrators::rungeKutta4, TUDAT_NAN, 1000.0 );
 
-    // Create list of dependent variables to save (distance to all flyby bodies and Sun)
+    // Create list of relevant bodies
     std::vector< std::string > bodyList;
-    for( int i = 0; i < transferBodyOrder.size( ); i++ )
+    for( unsigned int i = 0; i < transferBodyOrder.size( ); i++ )
     {
         if( std::find( bodyList.begin( ), bodyList.end( ), transferBodyOrder.at( i ) ) ==
                 bodyList.end( ) )
@@ -206,6 +210,7 @@ int main( )
     }
     bodyList.push_back( "Sun" );
 
+    // Create list of dependent variables to save (distance to all flyby bodies and Sun)
     std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariableList;
     for( unsigned int i = 0; i < bodyList.size( ); i++ )
     {

@@ -113,11 +113,11 @@ int main( )
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     double initialTotalPropagationTime = 0.0 * tudat::physical_constants::JULIAN_YEAR;
-    double finalTotalPropagationTime = 2.0 * tudat::physical_constants::JULIAN_YEAR;
+    double finalTotalPropagationTime = 1.0 * tudat::physical_constants::JULIAN_YEAR;
     double integrationTimeStep = 1.0E3;
 
     // Split dynamics propagation into arcs.
-    int numberOfArcs = 12;
+    int numberOfArcs = 6;
     double arcDuration = ( finalTotalPropagationTime - initialTotalPropagationTime ) /
             static_cast< double >( numberOfArcs );
 
