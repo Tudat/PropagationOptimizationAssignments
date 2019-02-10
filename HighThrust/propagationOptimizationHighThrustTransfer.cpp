@@ -152,7 +152,7 @@ int main( )
                 transferBodyOrder );
 
     std::vector< double > trajectoryIndependentVariables;
-    for( int i = 0; i < trajectoryParameters.size( ) - 1; i++ )
+    for( unsigned int i = 0; i < trajectoryParameters.size( ) - 1; i++ )
     {
         trajectoryIndependentVariables.push_back( trajectoryParameters.at( i ) * physical_constants::JULIAN_DAY );
     }
