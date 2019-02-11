@@ -191,15 +191,11 @@ int main( )
     // Load Spice kernels.
     spice_interface::loadStandardSpiceKernels( );
 
-
     std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimization" );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////            SIMULATION SETTINGS            /////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-    double vehicleDensity = 250.0;
 
     // Set spherical elements for Capsule.
     Eigen::Vector6d capsuleSphericalEntryState;
@@ -214,6 +210,13 @@ int main( )
             unit_conversions::convertDegreesToRadians( -1.5 );
     capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::headingAngleIndex ) =
             unit_conversions::convertDegreesToRadians( 34.37 );
+
+    // Vehicle properties
+    double vehicleDensity = 250.0;
+
+    // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
+    std::vector< double > shapeParameters =
+    { 8.148730872315355, 2.720324489288032, 0.2270385167794302, -0.4037530896422072, 0.2781438040896319, 0.4559143679738996 };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////            CREATE ENVIRONMENT            //////////////////////////////////////////////////////
@@ -236,7 +239,6 @@ int main( )
     // Create Earth object
     simulation_setup::NamedBodyMap bodyMap = simulation_setup::createBodies( bodySettings );
 
-
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             CREATE VEHICLE            /////////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -247,13 +249,7 @@ int main( )
     // Finalize body creation.
     setGlobalFrameBodyEphemerides( bodyMap, "Earth", "J2000" );
 
-    // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    std::vector< double > shapeParameters =
-    { 8.148730872315355, 2.720324489288032, 0.2270385167794302, -0.4037530896422072, 0.2781438040896319, 0.4559143679738996 };
-
-
-    double limitLength =
-            ( shapeParameters[ 1 ] - shapeParameters[ 4 ] * ( 1.0 - std::cos( shapeParameters[ 3 ] ) ) ) /
+    double limitLength = ( shapeParameters[ 1 ] - shapeParameters[ 4 ] * ( 1.0 - std::cos( shapeParameters[ 3 ] ) ) ) /
             std::tan( -shapeParameters[ 3 ] );
     if( shapeParameters[ 2 ] >= limitLength - 0.01 )
     {
@@ -313,7 +309,6 @@ int main( )
 
     // Define termination conditions
     std::vector< std::shared_ptr< PropagationTerminationSettings > > terminationSettingsList;
-
     std::shared_ptr< SingleDependentVariableSaveSettings > terminationDependentVariable =
             std::make_shared< SingleDependentVariableSaveSettings >( altitude_dependent_variable, "Capsule", "Earth" );
     terminationSettingsList.push_back(
@@ -332,7 +327,6 @@ int main( )
                                           airspeed_dependent_variable, "Capsule", "Earth" ) );
     dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
                                           aerodynamic_force_coefficients_dependent_variable, "Capsule" ) );
-
     std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave =
             std::make_shared< DependentVariableSaveSettings >( dependentVariablesList );
 

@@ -97,7 +97,6 @@ int main( )
     spice_interface::loadStandardSpiceKernels( );
 
     std::string outputPath = tudat_applications::getOutputPath( "HighThrust" );
-    std::string inputPath = "/home/dominic/Software/tudatBundleTest/tudatBundle/tudatApplications/PropagationOptimizationAssignments/HighThrust/";
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////        TRANSFER SETTINGS                 //////////////////////////////////////////////////////
@@ -106,7 +105,8 @@ int main( )
     // Define different cases for 3rd and 4th body
     std::vector< std::string > transferCases = { "EVEEJ", "EVVEJ",  "EVEVJ", "EVVMJ", "EVEMJ", "EVMMJ", "EVMVJ"  };
     std::vector< std::pair< std::string, std::string > > transferCaseNames =
-    { { "Earth", "Earth" }, { "Venus", "Earth" }, { "Earth", "Venus" }, { "Venus", "Mars" }, { "Earth", "Mars" }, { "Mars", "Mars" }, { "Mars", "Venus" } };
+    { { "Earth", "Earth" }, { "Venus", "Earth" }, { "Earth", "Venus" }, { "Venus", "Mars" }, { "Earth", "Mars" },
+      { "Mars", "Mars" }, { "Mars", "Venus" } };
 
     // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
     std::vector< double > trajectoryParameters =
