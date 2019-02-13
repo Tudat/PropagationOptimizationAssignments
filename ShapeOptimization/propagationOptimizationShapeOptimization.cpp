@@ -330,11 +330,14 @@ int main( )
     std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave =
             std::make_shared< DependentVariableSaveSettings >( dependentVariablesList );
 
+    // Define propagator type
+    TranslationalPropagatorType propagatorType = cowell;
+
     // Create propagation settings.
     std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings =
             std::make_shared< TranslationalStatePropagatorSettings< double > >(
                 centralBodies, accelerationModelMap, bodiesToPropagate, systemInitialState,
-                terminationSettings, cowell, dependentVariablesToSave );
+                terminationSettings, propagatorType, dependentVariablesToSave );
     std::shared_ptr< IntegratorSettings< > > integratorSettings =
             std::make_shared< IntegratorSettings< > >( rungeKutta4, simulationStartEpoch, fixedStepSize );
 

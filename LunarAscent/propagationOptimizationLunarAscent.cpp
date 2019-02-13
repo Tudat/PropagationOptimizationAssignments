@@ -295,11 +295,14 @@ int main( )
     std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave =
             std::make_shared< DependentVariableSaveSettings >( dependentVariablesList );
 
+    // Define propagator type
+    TranslationalPropagatorType propagatorType = cowell;
+
     // Define translational state propagation settings
     std::shared_ptr< TranslationalStatePropagatorSettings< double > > translationalStatePropagatorSettings =
             std::make_shared< TranslationalStatePropagatorSettings< double > >(
                 centralBodies, accelerationModelMap, bodiesToPropagate, systemInitialState,
-                terminationSettings );
+                terminationSettings, propagatorType );
 
     // Define mass propagation settings
     std::map< std::string, std::shared_ptr< basic_astrodynamics::MassRateModel > > massRateModels;

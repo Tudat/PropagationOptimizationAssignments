@@ -208,10 +208,13 @@ int main( )
                     primarySecondaryDistance, currentNormalizedInitialState, dimensionLessInitialTime ) -
                 bodyMap.at( centralBodyOfPropagation )->getEphemeris( )->getCartesianState( initialPropagationTime );
 
+        // Define propagator type
+        TranslationalPropagatorType propagatorType = cowell;
+
         std::shared_ptr< TranslationalStatePropagatorSettings< double> > propagatorSettings =
                 std::make_shared< TranslationalStatePropagatorSettings< double > >
                 ( centralBodies, accelerationModelMap, bodiesToPropagate, initialCartesianState,
-                  std::make_shared< PropagationTimeTerminationSettings >( finalPropagationTime, true ) );
+                  std::make_shared< PropagationTimeTerminationSettings >( finalPropagationTime, true ), propagatorType );
 
         std::shared_ptr< numerical_integrators::IntegratorSettings< > > integratorSettings =
                 std::make_shared < numerical_integrators::IntegratorSettings < > >
