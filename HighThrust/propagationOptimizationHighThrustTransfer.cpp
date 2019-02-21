@@ -8,6 +8,8 @@
  *    http://tudat.tudelft.nl/LICENSE.
  */
 
+#include <chrono>
+
 #include <Tudat/SimulationSetup/tudatSimulationHeader.h>
 #include <Tudat/Astrodynamics/TrajectoryDesign/trajectory.h>
 #include <Tudat/SimulationSetup/PropagationSetup/propagationPatchedConicFullProblem.h>
@@ -238,6 +240,12 @@ int main( )
                 trajectoryIndependentVariables, minimumPericenterRadii, departureCaptureSemiMajorAxes,
                 departureCaptureEccentricities, dependentVariablesToSave, propagatorType, true );
 
+    // Create an object of `steady_clock` class
+    std::chrono::steady_clock sc;
+
+    // Start timer
+    auto start = sc.now();
+
     // Propagate full dynamics of problem
     std::map< int, std::map< double, Eigen::Vector6d > > lambertTargeterResultForEachLeg;
     std::map< int, std::map< double, Eigen::Vector6d > > fullProblemResultForEachLeg;
@@ -248,6 +256,15 @@ int main( )
                 departureCaptureSemiMajorAxes, departureCaptureEccentricities,
                 propagatorSettings, integratorSettings,
                 lambertTargeterResultForEachLeg, fullProblemResultForEachLeg, dependentVariableResultForEachLeg );
+
+    // End timer (starting & ending is done by measuring the time at the moment the process started & ended respectively)
+    auto end = sc.now();
+
+    // Measure time span between start & end
+    auto time_span = static_cast<std::chrono::duration<double>>(end - start);
+    double runTimeInSeconds = time_span.count( );
+
+    std::cout<<"Operation took: "<<runTimeInSeconds<<" seconds"<<std::endl;
 
     // Write patched conic results to file for each leg
     for( auto resultIterator : lambertTargeterResultForEachLeg )
