@@ -88,10 +88,9 @@ std::vector < basic_astrodynamics::AccelerationMap > getAccelerationModelsPertur
  *   Input parameters:
  *
  *   trajectoryIndependentVariables: A vector defining the start time (first entry, in seconds since J2000) and duration of all 4
- *      legs (second, third, fourth and fifth entries respectively). For technical reasons, the final (in this case sixth) entry
- *      of this vector should always be 0.
- *   transferCase: Integer defining which entry of the transferCaseNames vector is to be used (e.g. which bodies X and Y are
- *   used for the 3rd and 4th body)
+ *      legs (second, third, fourth and fifth entries respectively). The final entry
+ *      of this vector is an integer defining which entry of the transferCaseNames vector is to be used,
+ *      e.g. which bodies X and Y are used for the 3rd and 4th body.
  */
 int main( )
 {
