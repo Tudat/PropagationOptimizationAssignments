@@ -265,6 +265,65 @@ int main( )
 
     std::cout<<"Operation took: "<<runTimeInSeconds<<" seconds"<<std::endl;
 
+    double currentArcMiddleTime = trajectoryParameters.at( 0 ) + trajectoryParameters.at( 1 ) / 2.0;
+    for( auto resultIterator : fullProblemResultForEachLeg )
+    {
+        int currentArc = resultIterator.first;
+
+        // Retrieve state history for current arc
+        std::map< double, Eigen::Vector6d > fullProblemSolution = resultIterator.second;
+
+        // Retrieve numerical state at middle of arc.
+        Eigen::Vector6d currentArcMiddleState = interpolators::createOneDimensionalInterpolator(
+                    fullProblemSolution, std::make_shared< interpolators::LagrangeInterpolatorSettings >(
+                         8 ) )->interpolate( currentArcMiddleTime * 86400.0 );
+
+        // Reset integrator initial time
+        integratorSettings->initialTime_ = currentArcMiddleTime * 86400.0;
+
+        // Retrieve propagation settings for forward propagation, and reset initial state/final time
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > forwardPropagatorSettings =
+                propagatorSettings.at( resultIterator.first ).second;
+        forwardPropagatorSettings->resetInitialStates( currentArcMiddleState );
+        forwardPropagatorSettings->resetTerminationSettings( std::make_shared< PropagationTimeTerminationSettings >(
+                                                                 fullProblemSolution.rbegin( )->first ) );
+
+        // Ensure time step is positive (forward integration)
+        integratorSettings->initialTimeStep_ = std::fabs( integratorSettings->initialTimeStep_ );
+
+        // Propagate dynamics forward and print results to file
+        SingleArcDynamicsSimulator< > forwardDynamicsSimulator(
+                    bodyMapForPropagation, integratorSettings, forwardPropagatorSettings );
+        input_output::writeDataMapToTextFile(
+                    forwardDynamicsSimulator.getEquationsOfMotionNumericalSolution( ), "numericalResultForward" +
+                    std::to_string( resultIterator.first ) + ".dat", outputPath );
+
+
+        // Retrieve propagation settings for backward propagation, and reset initial state/final time
+        std::shared_ptr< propagators::TranslationalStatePropagatorSettings< double > > backwardPropagatorSettings =
+                propagatorSettings.at( resultIterator.first ).second;
+        backwardPropagatorSettings->resetInitialStates( currentArcMiddleState );
+        backwardPropagatorSettings->resetTerminationSettings( std::make_shared< PropagationTimeTerminationSettings >(
+                                                                 fullProblemSolution.begin( )->first ) );
+
+        // Set negative timestep (backward integration)
+        integratorSettings->initialTimeStep_ *= -1.0;
+
+        // Propagate dynamics backward and print results to file
+        SingleArcDynamicsSimulator< > backwardDynamicsSimulator(
+                    bodyMapForPropagation, integratorSettings, backwardPropagatorSettings );
+        input_output::writeDataMapToTextFile(
+                    backwardDynamicsSimulator.getEquationsOfMotionNumericalSolution( ), "numericalResultBackward" +
+                    std::to_string( resultIterator.first ) + ".dat", outputPath );
+
+        // Update arc middle time for next arc.
+        if( currentArc < fullProblemResultForEachLeg.size( ) - 1 )
+        {
+            currentArcMiddleTime += ( trajectoryParameters.at( currentArc + 1 ) + trajectoryParameters.at( currentArc + 2 ) ) / 2.0;
+
+        }
+    }
+
     // Write patched conic results to file for each leg
     for( auto resultIterator : lambertTargeterResultForEachLeg )
     {
