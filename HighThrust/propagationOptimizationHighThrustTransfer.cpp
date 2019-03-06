@@ -48,8 +48,11 @@ std::vector < basic_astrodynamics::AccelerationMap > getAccelerationModelsPertur
 
         if( i != numberOfLegs -1 )
         {
-            accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i + 1 ) ].push_back(
-                        std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+            if( transferBodyOrder.at( i ) != transferBodyOrder.at( i + 1 ) )
+            {
+                accelerationSettingsMap[ nameBodyToPropagate ][ transferBodyOrder.at( i + 1 ) ].push_back(
+                            std::make_shared< AccelerationSettings >( basic_astrodynamics::point_mass_gravity ) );
+            }
         }
 
         accelerationMapsVector.push_back( createAccelerationModelsMap(
@@ -276,7 +279,7 @@ int main( )
         // Retrieve numerical state at middle of arc.
         Eigen::Vector6d currentArcMiddleState = interpolators::createOneDimensionalInterpolator(
                     fullProblemSolution, std::make_shared< interpolators::LagrangeInterpolatorSettings >(
-                         8 ) )->interpolate( currentArcMiddleTime * 86400.0 );
+                        8 ) )->interpolate( currentArcMiddleTime * 86400.0 );
 
         // Reset integrator initial time
         integratorSettings->initialTime_ = currentArcMiddleTime * 86400.0;
@@ -304,7 +307,7 @@ int main( )
                 propagatorSettings.at( resultIterator.first ).second;
         backwardPropagatorSettings->resetInitialStates( currentArcMiddleState );
         backwardPropagatorSettings->resetTerminationSettings( std::make_shared< PropagationTimeTerminationSettings >(
-                                                                 fullProblemSolution.begin( )->first ) );
+                                                                  fullProblemSolution.begin( )->first ) );
 
         // Set negative timestep (backward integration)
         integratorSettings->initialTimeStep_ *= -1.0;
