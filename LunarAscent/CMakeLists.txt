@@ -175,6 +175,17 @@ else()
   endif( )
 endif( )
 
+# Find PaGMO library on local system.
+if( USE_PAGMO )
+  find_package(PaGMO2)
+
+  # Include PaGMO directories.
+  if(NOT APPLE OR APPLE_INCLUDE_FORCE)
+    include_directories(SYSTEM AFTER "${PAGMO_INCLUDE_DIR}")
+  else( )
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem \"${PAGMO_INCLUDE_DIR}\"")
+  endif( )
+endif( )
 
 # Set compiler based on preferences (e.g. USE_CLANG) and system.
 include(tudatLinkLibraries)
