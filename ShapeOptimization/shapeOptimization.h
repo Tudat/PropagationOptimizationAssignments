@@ -67,7 +67,10 @@ public:
     std::vector< double > fitness( std::vector< double >& x ) const;
 
     // Public member fields
-    std::string outputPath_;
+    std::string outputPath;
+    // Make mutable so that they can be assigned to in a const class method
+    mutable std::map< double, Eigen::VectorXd > propagatedStateHistory;
+    mutable std::map< double, Eigen::VectorXd > dependentVariableHistory;
 
 private:
 

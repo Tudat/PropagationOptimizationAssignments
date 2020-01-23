@@ -26,6 +26,8 @@ int main()
 
     // Perform benchmark
     prob.setPropagatorIntegrator(cowell, RKF78);
+    input_output::writeDataMapToTextFile( prob.propagatedStateHistory, "stateHistory_benchmark.dat", prob.outputPath );
+    input_output::writeDataMapToTextFile( prob.dependentVariableHistory, "dependentVariables_benchmark.dat", prob.outputPath );
 
     // Decision vector is required by Pagmo specification. Since we are calling the fitness function directly,
     // pass it a dummy decision vector {0.0}
@@ -89,8 +91,8 @@ int main()
             prob.fitness( decisionVector );
 
             // TODO: retrieve state & dependent variable history from fitness function (const function!)
-            //input_output::writeDataMapToTextFile( propagatedStateHistory, "stateHistory_" + std::to_string(i) + "_" + std::to_string(j) + ".dat", outputPath_ );
-            //input_output::writeDataMapToTextFile( dependentVariableHistory, "dependentVariables_" + std::to_string(i) + ".dat", outputPath_ );
+            input_output::writeDataMapToTextFile( prob.propagatedStateHistory, "stateHistory_" + std::to_string(i) + "_" + std::to_string(j) + ".dat", prob.outputPath );
+            input_output::writeDataMapToTextFile( prob.dependentVariableHistory, "dependentVariables_" + std::to_string(i) + ".dat", prob.outputPath );
         }
     }
 }

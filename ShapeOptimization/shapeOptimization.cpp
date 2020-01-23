@@ -154,7 +154,7 @@ ShapeOptimizationProblem::ShapeOptimizationProblem()
     // Load Spice kernels.
     spice_interface::loadStandardSpiceKernels( );
 
-    outputPath_ = tudat_applications::getOutputPath( "ShapeOptimization" );
+    outputPath = tudat_applications::getOutputPath( "ShapeOptimization" );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////            SIMULATION SETTINGS            /////////////////////////////////////////////////////
@@ -227,7 +227,7 @@ ShapeOptimizationProblem::ShapeOptimizationProblem()
 
     // Create vehicle aerodynamic coefficients
     bodyMap_[ "Capsule" ]->setAerodynamicCoefficientInterface(
-                getCapsuleCoefficientInterface( capsule, outputPath_, "output_", true ) );
+                getCapsuleCoefficientInterface( capsule, outputPath, "output_", true ) );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
@@ -354,8 +354,8 @@ std::vector< double > ShapeOptimizationProblem::fitness( std::vector< double >& 
     SingleArcDynamicsSimulator< > dynamicsSimulator{ bodyMap_, integratorSettings_, propagatorSettings_ };
 
     // Call separate class methods to return the state and dependent variable maps
-    returnPropagatedStateHistory( dynamicsSimulator.getEquationsOfMotionNumericalSolution( ) );
-    returnDependentVariableHistory( dynamicsSimulator.getDependentVariableHistory( ) );
+    propagatedStateHistory = dynamicsSimulator.getEquationsOfMotionNumericalSolution( );
+    dependentVariableHistory = dynamicsSimulator.getDependentVariableHistory( );
 
     // Return fitness; for now just return {0.0}
     return {0.0};
