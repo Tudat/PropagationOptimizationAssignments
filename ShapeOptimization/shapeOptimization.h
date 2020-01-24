@@ -32,33 +32,66 @@ namespace tudat_applications
 {
 namespace PropagationOptimization2020
 {
+//std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInterface(
+//        const std::shared_ptr< geometric_shapes::Capsule > capsule,
+//        const std::string directory,
+//        const std::string filePrefix,
+//        const bool useNewtonianMethodForAllPanels = true );
 
-enum IntegratorType
+void setVehicleShapeParameters(
+        std::vector< double > shapeParameters,
+        const NamedBodyMap& bodyMap );
+
+//! Class to set the aerodynamic angles of the capsule (default: all angles 0)
+class CapsuleAerodynamicGuidance: public aerodynamics::AerodynamicGuidance
 {
-    Euler,
-    RK4,
-    RKF45,
-    RKF56,
-    RKF78,
-    RK87,
-    ABM,
-    BS
+public:
+
+    //! Constructor
+    CapsuleAerodynamicGuidance(
+            const NamedBodyMap bodyMap_,
+            const double fixedAngleOfAttack ):bodyMap_( bodyMap_ ), fixedAngleOfAttack_( fixedAngleOfAttack )
+    {
+
+    }
+
+    //! The aerodynamic angles are to be computed here
+    void updateGuidance( const double time )
+    {
+        currentAngleOfAttack_ = fixedAngleOfAttack_;
+        currentAngleOfSideslip_ = 0.0;
+        currentBankAngle_ = 0.0;
+
+    }
+
+private:
+
+    //! List of body objects that constitute the environment
+    NamedBodyMap bodyMap_;
+
+    //! Fixed angle of attack that is to be used by vehicle
+    double fixedAngleOfAttack_;
 };
+
+
 
 class ShapeOptimizationProblem
 {
 public:
 
     // Constructor
-    ShapeOptimizationProblem();
+    ShapeOptimizationProblem(
+            const simulation_setup::NamedBodyMap bodyMap,
+            const std::shared_ptr< IntegratorSettings< > > integratorSettings,
+            const std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings );
 
-    void setPropagatorIntegrator(TranslationalPropagatorType propagatorType, IntegratorType integratorType);
+    ShapeOptimizationProblem( );
 
-    std::map< double, Eigen::VectorXd > returnPropagatedStateHistory(std::map< double, Eigen::VectorXd > propagatedStateHistory) const
+    std::map< double, Eigen::VectorXd > getLastRunPropagatedStateHistory( ) const
     {
         return propagatedStateHistory;
     }
-    std::map< double, Eigen::VectorXd > returnDependentVariableHistory(std::map< double, Eigen::VectorXd > dependentVariableHistory) const
+    std::map< double, Eigen::VectorXd > getLastRunDependentVariableHistory( ) const
     {
         return dependentVariableHistory;
     }
@@ -66,23 +99,17 @@ public:
     // Fitness function; needs to adhere to Pagmo specifications
     std::vector< double > fitness( std::vector< double >& x ) const;
 
-    // Public member fields
-    std::string outputPath;
-    // Make mutable so that they can be assigned to in a const class method
-    mutable std::map< double, Eigen::VectorXd > propagatedStateHistory;
-    mutable std::map< double, Eigen::VectorXd > dependentVariableHistory;
+
 
 private:
 
-    // Private member fields
-    double simulationStartEpoch_;
-    Eigen::Vector6d systemInitialState_;
     simulation_setup::NamedBodyMap bodyMap_;
-    std::vector< std::string > centralBodies_;
-    std::vector< std::string > bodiesToPropagate_;
-    basic_astrodynamics::AccelerationMap accelerationModelMap_;
     std::shared_ptr< IntegratorSettings< > > integratorSettings_;
     std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings_;
+
+    // Make mutable so that they can be assigned to in a const class method
+    mutable std::map< double, Eigen::VectorXd > propagatedStateHistory;
+    mutable std::map< double, Eigen::VectorXd > dependentVariableHistory;
 
 };
 
