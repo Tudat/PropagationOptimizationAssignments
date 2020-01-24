@@ -32,15 +32,19 @@ namespace tudat_applications
 {
 namespace PropagationOptimization2020
 {
-//std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInterface(
-//        const std::shared_ptr< geometric_shapes::Capsule > capsule,
-//        const std::string directory,
-//        const std::string filePrefix,
-//        const bool useNewtonianMethodForAllPanels = true );
+
+std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInterface(
+        const std::shared_ptr< geometric_shapes::Capsule > capsule,
+        const std::string directory,
+        const std::string filePrefix,
+        const bool useNewtonianMethodForAllPanels = true );
 
 void setVehicleShapeParameters(
         std::vector< double > shapeParameters,
         const NamedBodyMap& bodyMap );
+
+void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
+                          std::vector< double >& shapeParameters );
 
 //! Class to set the aerodynamic angles of the capsule (default: all angles 0)
 class CapsuleAerodynamicGuidance: public aerodynamics::AerodynamicGuidance
@@ -89,12 +93,18 @@ public:
 
     std::map< double, Eigen::VectorXd > getLastRunPropagatedStateHistory( ) const
     {
-        return propagatedStateHistory;
+        return dynamicsSimulator_->getEquationsOfMotionNumericalSolution( );
     }
     std::map< double, Eigen::VectorXd > getLastRunDependentVariableHistory( ) const
     {
-        return dependentVariableHistory;
+        return dynamicsSimulator_->getDependentVariableHistory( );
     }
+
+    std::shared_ptr< SingleArcDynamicsSimulator< > > getLastRunDynamicsSimulator( )
+    {
+        return dynamicsSimulator_;
+    }
+
 
     // Fitness function; needs to adhere to Pagmo specifications
     std::vector< double > fitness( std::vector< double >& x ) const;
@@ -103,9 +113,11 @@ public:
 
 private:
 
-    simulation_setup::NamedBodyMap bodyMap_;
+    mutable simulation_setup::NamedBodyMap bodyMap_;
     std::shared_ptr< IntegratorSettings< > > integratorSettings_;
     std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings_;
+
+    mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
 
     // Make mutable so that they can be assigned to in a const class method
     mutable std::map< double, Eigen::VectorXd > propagatedStateHistory;

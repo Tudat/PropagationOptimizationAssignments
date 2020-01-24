@@ -28,7 +28,7 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
         const std::shared_ptr< geometric_shapes::Capsule > capsule,
         const std::string directory,
         const std::string filePrefix,
-        const bool useNewtonianMethodForAllPanels = true )
+        const bool useNewtonianMethodForAllPanels )
 {
 
     // Define settings for surface discretization of capsule
@@ -146,6 +146,18 @@ void setVehicleShapeParameters(
 
 }
 
+void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
+                          std::vector< double >& shapeParameters )
+{
+    // Create vehicle objects.
+    bodyMap[ "Capsule" ] = std::make_shared< simulation_setup::Body >( );
+    setVehicleShapeParameters( shapeParameters, bodyMap );
+
+    // Finalize body creation.
+    setGlobalFrameBodyEphemerides( bodyMap, "Earth", "J2000" );
+
+}
+
 }
 
 }
@@ -168,12 +180,18 @@ ShapeOptimizationProblem::ShapeOptimizationProblem()
 // The const identifier is really annoying (but required by Pagmo), as we cannot set class member fields or call non-const functions to set them for us
 std::vector< double > ShapeOptimizationProblem::fitness( std::vector< double >& shapeParameters) const
 {
-    // Create simulation object and propagate dynamics
-    SingleArcDynamicsSimulator< > dynamicsSimulator{ bodyMap_, integratorSettings_, propagatorSettings_ };
+    // Recreate capsule body with new shape parameters
+    bodyMap_.at( "Capsule" ).reset( );
+    addCapsuleToBodyMap( bodyMap_, shapeParameters );
 
-    // Call separate class methods to return the state and dependent variable maps
-    propagatedStateHistory = dynamicsSimulator.getEquationsOfMotionNumericalSolution( );
-    dependentVariableHistory = dynamicsSimulator.getDependentVariableHistory( );
+    // Reset propagation and guidance models
+    propagatorSettings_->resetIntegratedStateModels( bodyMap_ );
+    std::shared_ptr< CapsuleAerodynamicGuidance > capsuleGuidance =
+            std::make_shared< CapsuleAerodynamicGuidance >( bodyMap_, shapeParameters.at( 5 ) );
+    setGuidanceAnglesFunctions( capsuleGuidance, bodyMap_.at( "Capsule" ) );
+
+    // Propagate dynamics
+    dynamicsSimulator_ = std::make_shared< SingleArcDynamicsSimulator< > >( bodyMap_, integratorSettings_, propagatorSettings_ );
 
     // Return fitness; for now just return {0.0}
     return {0.0};

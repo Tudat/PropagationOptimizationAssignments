@@ -57,13 +57,7 @@ int main()
 
     // Create Earth object
     simulation_setup::NamedBodyMap bodyMap = simulation_setup::createBodies( bodySettings );
-
-    // Create vehicle objects.
-    bodyMap[ "Capsule" ] = std::make_shared< simulation_setup::Body >( );
-    setVehicleShapeParameters( shapeParameters, bodyMap );
-
-    // Finalize body creation.
-    setGlobalFrameBodyEphemerides( bodyMap, "Earth", "J2000" );
+    addCapsuleToBodyMap( bodyMap, shapeParameters );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
@@ -83,12 +77,12 @@ int main()
     bodiesToPropagate.push_back( "Capsule" );
     centralBodies.push_back( "Earth" );
 
-    // Create acceleration models
-    basic_astrodynamics::AccelerationMap accelerationModelMap = createAccelerationModelsMap(
-                bodyMap, accelerationSettingsMap, bodiesToPropagate, centralBodies );
-    std::shared_ptr< CapsuleAerodynamicGuidance > capsuleGuidance =
-            std::make_shared< CapsuleAerodynamicGuidance >( bodyMap, shapeParameters.at( 5 ) );
-    setGuidanceAnglesFunctions( capsuleGuidance, bodyMap.at( "Capsule" ) );
+    //    // Create acceleration models
+    //    basic_astrodynamics::AccelerationMap accelerationModelMap = createAccelerationModelsMap(
+    //                bodyMap, accelerationSettingsMap, bodiesToPropagate, centralBodies );
+    //    std::shared_ptr< CapsuleAerodynamicGuidance > capsuleGuidance =
+    //            std::make_shared< CapsuleAerodynamicGuidance >( bodyMap, shapeParameters.at( 5 ) );
+    //    setGuidanceAnglesFunctions( capsuleGuidance, bodyMap.at( "Capsule" ) );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             CREATE PROPAGATION SETTINGS            ////////////////////////////////////////////
@@ -121,61 +115,116 @@ int main()
             std::make_shared< DependentVariableSaveSettings >( dependentVariablesList, false );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////  IF DESIRED, GENERATE BENCHMARK                            ////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    bool generateAndCompareToBenchmark = true;
+    if( generateAndCompareToBenchmark )
+    {
+        std::shared_ptr< TranslationalStatePropagatorSettings< double > > benchmarkPropagatorSettings =
+                std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                    centralBodies, accelerationSettingsMap, bodiesToPropagate, systemInitialState,
+                    terminationSettings, cowell, dependentVariablesToSave );
+
+        // Create integrator settings
+        std::shared_ptr< IntegratorSettings< > > benchmarkIntegratorSettings;
+        benchmarkIntegratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
+                    simulationStartEpoch, 0.2, RungeKuttaCoefficients::rungeKutta87DormandPrince,
+                    0.2, 0.2,
+                    std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
+
+        ShapeOptimizationProblem probBenchmarkFirst{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings };
+        probBenchmarkFirst.fitness( shapeParameters );
+
+
+        benchmarkIntegratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
+                    simulationStartEpoch, 0.4, RungeKuttaCoefficients::rungeKutta87DormandPrince,
+                    0.4, 0.4,
+                    std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
+        ShapeOptimizationProblem probBenchmarkSecond{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings };
+        probBenchmarkSecond.fitness( shapeParameters );
+
+
+        input_output::writeDataMapToTextFile( probBenchmarkFirst.getLastRunPropagatedStateHistory( ),
+                                              "benchmark1.dat", outputPath );
+        input_output::writeDataMapToTextFile( probBenchmarkSecond.getLastRunPropagatedStateHistory( ),
+                                              "benchmark2.dat", outputPath );
+
+    }
+
+    // TO BE DONE: use benchmark compute difference w.r.t. all other runs
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             RUN SIMULATION FOR VARIOUS SETTINGS            ////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
+    // Define list of propagators (for convenience)
     std::vector< TranslationalPropagatorType > propagatorTypes =
     { cowell, encke, gauss_keplerian, gauss_modified_equinoctial,
       unified_state_model_quaternions, unified_state_model_modified_rodrigues_parameters,
       unified_state_model_exponential_map };
 
-
+    // Define list of multi-stage integrators (for convenience)
     std::vector< RungeKuttaCoefficients::CoefficientSets > multiStageTypes =
     { RungeKuttaCoefficients::rungeKuttaFehlberg45,
-            RungeKuttaCoefficients::rungeKuttaFehlberg56,
-            RungeKuttaCoefficients::rungeKuttaFehlberg78,
-            RungeKuttaCoefficients::rungeKutta87DormandPrince };
+      RungeKuttaCoefficients::rungeKuttaFehlberg56,
+      RungeKuttaCoefficients::rungeKuttaFehlberg78,
+      RungeKuttaCoefficients::rungeKutta87DormandPrince };
 
+    // Define number of settings to use
     int numberOfPropagators = 7;
     int numberOfIntegrators = 5;
     int numberOfIntegratorStepSizeSettings = 4;
     for( int i = 0; i < numberOfPropagators; i++ )
     {
+        // Create propagator settings
         TranslationalPropagatorType propagatorType = propagatorTypes.at( i );
         std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings =
                 std::make_shared< TranslationalStatePropagatorSettings< double > >(
-                    centralBodies, accelerationModelMap, bodiesToPropagate, systemInitialState,
+                    centralBodies, accelerationSettingsMap, bodiesToPropagate, systemInitialState,
                     terminationSettings, propagatorType, dependentVariablesToSave );
+        //        propagatorSettings->resetIntegratedStateModels( bodyMap );
 
+        // Iterate over all types of integrators
         for( int j = 0; j < numberOfIntegrators; j++ )
         {
-            if( j < 4 )
-            {
-                numberOfIntegratorStepSizeSettings = 4;
-            }
-            else
+            // Change number of integrator settings for RK4
+            if( j >= 4 )
             {
                 numberOfIntegratorStepSizeSettings = 6;
             }
+
+            // Iterate over all tolerances/step sizes
             for( int k = 0; k < numberOfIntegratorStepSizeSettings; k++ )
             {
+                // Print status
                 std::cout<<"Current run "<<i<<" "<<j<<" "<<k<<std::endl;
+
+                // Define integrator settings
                 std::shared_ptr< IntegratorSettings< > > integratorSettings;
+
+                // Create integrator settings (multi-stage variable-step)
                 if( j < 4 )
                 {
+                    // Extract integrator type and tolerance for current run
+                    RungeKuttaCoefficients::CoefficientSets currentCoefficientSet = multiStageTypes.at( j );
+                    double currentTolerance = std::pow( 10.0, -14 + k );
+
+                    // Create integrator settings
                     integratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
-                                        simulationStartEpoch, 1.0,
-                                        multiStageTypes.at( j ),
-                                        std::numeric_limits< double >::epsilon( ), std::numeric_limits< double >::infinity( ),
-                                        std::pow( 10.0, -14 + k ) );
+                                simulationStartEpoch, 1.0, currentCoefficientSet,
+                                std::numeric_limits< double >::epsilon( ), std::numeric_limits< double >::infinity( ),
+                                currentTolerance, currentTolerance );
 
                 }
+                // Create integrator settings (multi-stage fixed-step)
                 else
                 {
+                    // Create integrator settings
+                    double timeStep = 0.1 * std::pow( 2, k );
                     integratorSettings =
                             std::make_shared< IntegratorSettings< > >
-                            ( rungeKutta4, 0.0, 0.1 * std::pow( 2, k ) );
+                            ( rungeKutta4, simulationStartEpoch, timeStep );
                 }
 
 
@@ -185,17 +234,17 @@ int main()
                 // Propagate trajectory using defined settings
                 prob.fitness( shapeParameters );
 
-                // TODO: retrieve state & dependent variable history from fitness function (const function!)
+                // Save state and dependent variable results to file
                 input_output::writeDataMapToTextFile( prob.getLastRunPropagatedStateHistory( ),
-                                                      "stateHistory_"
-                                                      + std::to_string(i) + "_"
-                                                       + std::to_string(j) + "_"
-                                                       + std::to_string(k) + "_" + ".dat", outputPath );
+                                                      "stateHistory_test_"
+                                                      + std::to_string( i ) + "_"
+                                                      + std::to_string( j ) + "_"
+                                                      + std::to_string( k ) + "_" + ".dat", outputPath );
                 input_output::writeDataMapToTextFile( prob.getLastRunDependentVariableHistory( ),
-                                                      "dependentVariables_"
-                                                      + std::to_string(i) + "_"
-                                                       + std::to_string(j) + "_"
-                                                       + std::to_string(k) + "_" + ".dat", outputPath );
+                                                      "dependentVariables_test_"
+                                                      + std::to_string( i ) + "_"
+                                                      + std::to_string( j ) + "_"
+                                                      + std::to_string( k ) + "_" + ".dat", outputPath );
             }
         }
     }
