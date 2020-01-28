@@ -75,6 +75,8 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
                 std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
 
     ShapeOptimizationProblem probBenchmarkFirst{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings };
+
+    std::cout << "Running first benchmark..." << std::endl;
     probBenchmarkFirst.fitness( shapeParameters );
 
 
@@ -83,6 +85,8 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
                 0.4, 0.4,
                 std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
     ShapeOptimizationProblem probBenchmarkSecond{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings };
+
+    std::cout << "Running second benchmark..." << std::endl;
     probBenchmarkSecond.fitness( shapeParameters );
 
     std::map< double, Eigen::VectorXd > firstBenchmarkResults = probBenchmarkFirst.getLastRunPropagatedStateHistory( );
@@ -101,6 +105,29 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
     interpolators.push_back( createOneDimensionalInterpolator( secondBenchmarkResults, interpolatorSettings ) );
 
     return interpolators;
+}
+
+void writePropagatorIntegratorIndicesToFile( std::string outputPath )
+{
+    std::map< unsigned int, std::string > propagatorIndices;
+    std::map< unsigned int, std::string > integratorIndices;
+
+    propagatorIndices[0] = "Cowell";
+    propagatorIndices[1] = "Encke";
+    propagatorIndices[2] = "Gauss Keplerian";
+    propagatorIndices[3] = "Gauss Modified Equinoctial";
+    propagatorIndices[4] = "USM Quaternions";
+    propagatorIndices[5] = "USM MRP";
+    propagatorIndices[6] = "USM Exponential Map";
+
+    integratorIndices[0] = "RKF45";
+    integratorIndices[1] = "RKF56";
+    integratorIndices[2] = "RKF78";
+    integratorIndices[3] = "RK87 DP";
+    integratorIndices[4] = "RK4";
+
+    input_output::writeDataMapToTextFile( propagatorIndices, "propagator_indices.txt", outputPath );
+    input_output::writeDataMapToTextFile( integratorIndices, "integrator_indices.txt", outputPath );
 }
 
 int main()
@@ -183,7 +210,7 @@ int main()
 
     }
 
-    // TO BE DONE: use benchmark compute difference w.r.t. all other runs
+    // TODO: use benchmark compute difference w.r.t. all other runs
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             RUN SIMULATION FOR VARIOUS SETTINGS            ////////////////////////////////////
@@ -202,13 +229,15 @@ int main()
       RungeKuttaCoefficients::rungeKuttaFehlberg78,
       RungeKuttaCoefficients::rungeKutta87DormandPrince };
 
-    // TODO: map propagators and integrators to numbers and output to file
+    writePropagatorIntegratorIndicesToFile( outputPath );
+
+    // TODO: Create separate folders for benchmarks, indices files, and runs (e.g. one folder for each propagator type)
 
     // Define number of settings to use
-    int numberOfPropagators = 7;
-    int numberOfIntegrators = 5;
+    const unsigned int numberOfPropagators = 7;
+    const unsigned int numberOfIntegrators = 5;
     int numberOfIntegratorStepSizeSettings = 4;
-    for( int i = 0; i < numberOfPropagators; i++ )
+    for( unsigned int i = 0; i < numberOfPropagators; i++ )
     {
         // Create propagator settings
         TranslationalPropagatorType propagatorType = propagatorTypes.at( i );
@@ -219,7 +248,7 @@ int main()
         //        propagatorSettings->resetIntegratedStateModels( bodyMap );
 
         // Iterate over all types of integrators
-        for( int j = 0; j < numberOfIntegrators; j++ )
+        for( unsigned int j = 0; j < numberOfIntegrators; j++ )
         {
             // Change number of integrator settings for RK4
             if( j >= 4 )
