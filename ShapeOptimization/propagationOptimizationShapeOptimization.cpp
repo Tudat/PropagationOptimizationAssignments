@@ -12,19 +12,8 @@
 
 using namespace tudat_applications::PropagationOptimization2020;
 
-int main()
+Eigen::Vector6d getInitialState( double simulationStartEpoch, simulation_setup::NamedBodyMap bodyMap )
 {
-    // Load Spice kernels.
-    spice_interface::loadStandardSpiceKernels( );
-    std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimization" );
-
-    std::vector< double > shapeParameters =
-    { 8.148730872315355, 2.720324489288032, 0.2270385167794302, -0.4037530896422072, 0.2781438040896319, 0.4559143679738996 };
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////            BASIC SIMULATION SETTINGS            ///////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     // Set spherical elements for Capsule.
     Eigen::Vector6d capsuleSphericalEntryState;
     capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::radiusIndex ) =
@@ -38,6 +27,90 @@ int main()
             unit_conversions::convertDegreesToRadians( -1.5 );
     capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::headingAngleIndex ) =
             unit_conversions::convertDegreesToRadians( 34.37 );
+
+    // Set initial inertial Cartesian state
+    Eigen::Vector6d systemInitialState = convertSphericalOrbitalToCartesianState( capsuleSphericalEntryState );
+    systemInitialState = transformStateToGlobalFrame(
+                systemInitialState, simulationStartEpoch, bodyMap.at( "Earth" )->getRotationalEphemeris( ) );
+
+    return systemInitialState;
+
+}
+
+std::shared_ptr< PropagationTerminationSettings > getPropagationTerminationSettings()
+{
+    // Define termination conditions
+    std::vector< std::shared_ptr< PropagationTerminationSettings > > terminationSettingsList;
+    std::shared_ptr< SingleDependentVariableSaveSettings > terminationDependentVariable =
+            std::make_shared< SingleDependentVariableSaveSettings >( altitude_dependent_variable, "Capsule", "Earth" );
+    terminationSettingsList.push_back(
+                std::make_shared< PropagationDependentVariableTerminationSettings >(
+                    terminationDependentVariable, 25.0E3, true ) );
+    terminationSettingsList.push_back( std::make_shared< PropagationTimeTerminationSettings >(
+                                           24.0 * 3600.0 ) );
+    return std::make_shared< PropagationHybridTerminationSettings >( terminationSettingsList, true );
+}
+
+std::shared_ptr< DependentVariableSaveSettings > getDependentVariableSaveSettings()
+{
+    // Define dependent variables
+    std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariablesList;
+    dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
+                                          mach_number_dependent_variable, "Capsule" ) );
+    dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
+                                          altitude_dependent_variable, "Capsule", "Earth" ) );
+    return std::make_shared< DependentVariableSaveSettings >( dependentVariablesList, false );
+}
+
+std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > generateBenchmarks(
+        double simulationStartEpoch, simulation_setup::NamedBodyMap bodyMap,
+        std::shared_ptr< TranslationalStatePropagatorSettings< double > > benchmarkPropagatorSettings,
+        std::vector< double > shapeParameters, std::string outputPath )
+{
+    // Create integrator settings
+    std::shared_ptr< IntegratorSettings< > > benchmarkIntegratorSettings;
+    benchmarkIntegratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
+                simulationStartEpoch, 0.2, RungeKuttaCoefficients::rungeKutta87DormandPrince,
+                0.2, 0.2,
+                std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
+
+    ShapeOptimizationProblem probBenchmarkFirst{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings };
+    probBenchmarkFirst.fitness( shapeParameters );
+
+
+    benchmarkIntegratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
+                simulationStartEpoch, 0.4, RungeKuttaCoefficients::rungeKutta87DormandPrince,
+                0.4, 0.4,
+                std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
+    ShapeOptimizationProblem probBenchmarkSecond{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings };
+    probBenchmarkSecond.fitness( shapeParameters );
+
+    std::map< double, Eigen::VectorXd > firstBenchmarkResults = probBenchmarkFirst.getLastRunPropagatedStateHistory( );
+    std::map< double, Eigen::VectorXd > secondBenchmarkResults = probBenchmarkSecond.getLastRunPropagatedStateHistory( );
+
+    input_output::writeDataMapToTextFile( firstBenchmarkResults,
+                                          "benchmark1.dat", outputPath );
+    input_output::writeDataMapToTextFile( secondBenchmarkResults,
+                                          "benchmark2.dat", outputPath );
+
+    // Create 8th-order Lagrange interpolator
+    std::shared_ptr< InterpolatorSettings > interpolatorSettings = std::make_shared< LagrangeInterpolatorSettings >( 8 );
+    std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > interpolators;
+
+    interpolators.push_back( createOneDimensionalInterpolator( firstBenchmarkResults, interpolatorSettings ) );
+    interpolators.push_back( createOneDimensionalInterpolator( secondBenchmarkResults, interpolatorSettings ) );
+
+    return interpolators;
+}
+
+int main()
+{
+    // Load Spice kernels.
+    spice_interface::loadStandardSpiceKernels( );
+    std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimization" );
+
+    std::vector< double > shapeParameters =
+    { 8.148730872315355, 2.720324489288032, 0.2270385167794302, -0.4037530896422072, 0.2781438040896319, 0.4559143679738996 };
 
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,6 +131,9 @@ int main()
     // Create Earth object
     simulation_setup::NamedBodyMap bodyMap = simulation_setup::createBodies( bodySettings );
     addCapsuleToBodyMap( bodyMap, shapeParameters );
+
+    // Create initial Cartesian state from spherical elements
+    Eigen::Vector6d systemInitialState = getInitialState( simulationStartEpoch, bodyMap );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
@@ -88,31 +164,8 @@ int main()
     ///////////////////////             CREATE PROPAGATION SETTINGS            ////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Set initial inertial Cartesian state
-    Eigen::Vector6d systemInitialState = convertSphericalOrbitalToCartesianState( capsuleSphericalEntryState );
-    systemInitialState = transformStateToGlobalFrame(
-                systemInitialState, simulationStartEpoch, bodyMap.at( "Earth" )->getRotationalEphemeris( ) );
-
-    // Define termination conditions
-    std::vector< std::shared_ptr< PropagationTerminationSettings > > terminationSettingsList;
-    std::shared_ptr< SingleDependentVariableSaveSettings > terminationDependentVariable =
-            std::make_shared< SingleDependentVariableSaveSettings >( altitude_dependent_variable, "Capsule", "Earth" );
-    terminationSettingsList.push_back(
-                std::make_shared< PropagationDependentVariableTerminationSettings >(
-                    terminationDependentVariable, 25.0E3, true ) );
-    terminationSettingsList.push_back( std::make_shared< PropagationTimeTerminationSettings >(
-                                           24.0 * 3600.0 ) );
-    std::shared_ptr< PropagationTerminationSettings > terminationSettings = std::make_shared<
-            PropagationHybridTerminationSettings >( terminationSettingsList, true );
-
-    // Define dependent variables
-    std::vector< std::shared_ptr< SingleDependentVariableSaveSettings > > dependentVariablesList;
-    dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
-                                          mach_number_dependent_variable, "Capsule" ) );
-    dependentVariablesList.push_back( std::make_shared< SingleDependentVariableSaveSettings >(
-                                          altitude_dependent_variable, "Capsule", "Earth" ) );
-    std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave =
-            std::make_shared< DependentVariableSaveSettings >( dependentVariablesList, false );
+    std::shared_ptr< PropagationTerminationSettings > terminationSettings = getPropagationTerminationSettings();
+    std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave = getDependentVariableSaveSettings();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////  IF DESIRED, GENERATE BENCHMARK                            ////////////////////////////////////
@@ -125,30 +178,8 @@ int main()
                 std::make_shared< TranslationalStatePropagatorSettings< double > >(
                     centralBodies, accelerationSettingsMap, bodiesToPropagate, systemInitialState,
                     terminationSettings, cowell, dependentVariablesToSave );
-
-        // Create integrator settings
-        std::shared_ptr< IntegratorSettings< > > benchmarkIntegratorSettings;
-        benchmarkIntegratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
-                    simulationStartEpoch, 0.2, RungeKuttaCoefficients::rungeKutta87DormandPrince,
-                    0.2, 0.2,
-                    std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
-
-        ShapeOptimizationProblem probBenchmarkFirst{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings };
-        probBenchmarkFirst.fitness( shapeParameters );
-
-
-        benchmarkIntegratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
-                    simulationStartEpoch, 0.4, RungeKuttaCoefficients::rungeKutta87DormandPrince,
-                    0.4, 0.4,
-                    std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
-        ShapeOptimizationProblem probBenchmarkSecond{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings };
-        probBenchmarkSecond.fitness( shapeParameters );
-
-
-        input_output::writeDataMapToTextFile( probBenchmarkFirst.getLastRunPropagatedStateHistory( ),
-                                              "benchmark1.dat", outputPath );
-        input_output::writeDataMapToTextFile( probBenchmarkSecond.getLastRunPropagatedStateHistory( ),
-                                              "benchmark2.dat", outputPath );
+        std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > benchmarkInterpolators =
+                generateBenchmarks(simulationStartEpoch, bodyMap, benchmarkPropagatorSettings, shapeParameters, outputPath);
 
     }
 
@@ -170,6 +201,8 @@ int main()
       RungeKuttaCoefficients::rungeKuttaFehlberg56,
       RungeKuttaCoefficients::rungeKuttaFehlberg78,
       RungeKuttaCoefficients::rungeKutta87DormandPrince };
+
+    // TODO: map propagators and integrators to numbers and output to file
 
     // Define number of settings to use
     int numberOfPropagators = 7;
@@ -209,6 +242,8 @@ int main()
                     // Extract integrator type and tolerance for current run
                     RungeKuttaCoefficients::CoefficientSets currentCoefficientSet = multiStageTypes.at( j );
                     double currentTolerance = std::pow( 10.0, -14 + k );
+
+                    // CONVERT TO FUNCTION (j, k) -> INTEGRATOR SETTINGS OBJECT
 
                     // Create integrator settings
                     integratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
