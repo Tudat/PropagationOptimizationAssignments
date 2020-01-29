@@ -115,20 +115,51 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
     std::cout << "Running second benchmark..." << std::endl;
     probBenchmarkSecond.fitness( shapeParameters );
 
-    std::map< double, Eigen::VectorXd > firstBenchmarkResults = probBenchmarkFirst.getLastRunPropagatedStateHistory( );
-    std::map< double, Eigen::VectorXd > secondBenchmarkResults = probBenchmarkSecond.getLastRunPropagatedStateHistory( );
+    std::map< double, Eigen::VectorXd > firstBenchmarkStates = probBenchmarkFirst.getLastRunPropagatedStateHistory( );
+    std::map< double, Eigen::VectorXd > secondBenchmarkStates = probBenchmarkSecond.getLastRunPropagatedStateHistory( );
 
-    input_output::writeDataMapToTextFile( firstBenchmarkResults,
+    std::map< double, Eigen::VectorXd > firstBenchmarkDependent = probBenchmarkFirst.getLastRunDependentVariableHistory( );
+    std::map< double, Eigen::VectorXd > secondBenchmarkDependent = probBenchmarkSecond.getLastRunDependentVariableHistory( );
+
+    input_output::writeDataMapToTextFile( firstBenchmarkStates,
                                           "benchmark1.dat", outputPath );
-    input_output::writeDataMapToTextFile( secondBenchmarkResults,
+    input_output::writeDataMapToTextFile( secondBenchmarkStates,
                                           "benchmark2.dat", outputPath );
 
     // Create 8th-order Lagrange interpolator
     std::shared_ptr< InterpolatorSettings > interpolatorSettings = std::make_shared< LagrangeInterpolatorSettings >( 8 );
     std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > interpolators;
 
-    interpolators.push_back( createOneDimensionalInterpolator( firstBenchmarkResults, interpolatorSettings ) );
-    interpolators.push_back( createOneDimensionalInterpolator( secondBenchmarkResults, interpolatorSettings ) );
+    std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > firstStatesInterpolator =
+            createOneDimensionalInterpolator( firstBenchmarkStates, interpolatorSettings );
+    std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > secondStatesInterpolator =
+            createOneDimensionalInterpolator( secondBenchmarkStates, interpolatorSettings );
+    std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > firstDependentInterpolator =
+            createOneDimensionalInterpolator( firstBenchmarkDependent, interpolatorSettings );
+    std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > secondDependentInterpolator =
+            createOneDimensionalInterpolator( secondBenchmarkDependent, interpolatorSettings );
+
+    std::cout << "Calculating the difference between the benchmarks..." << std::endl;
+    std::map< double, Eigen::VectorXd > statesDifference;
+    std::map< double, Eigen::VectorXd > dependentVariablesDifference;
+    // Calculate difference between two benchmarks, both for the states and the dependent variables
+    for( auto iterator = firstBenchmarkStates.begin(); iterator != firstBenchmarkStates.end(); iterator++ )
+    {
+        statesDifference[ iterator->first ] = secondStatesInterpolator->interpolate( iterator->first ) - iterator->second;
+    }
+    for( auto iterator = firstBenchmarkDependent.begin(); iterator != firstBenchmarkDependent.end(); iterator++ )
+    {
+        dependentVariablesDifference[ iterator->first ] = secondDependentInterpolator->interpolate( iterator->first ) - iterator->second;
+    }
+
+    input_output::writeDataMapToTextFile( statesDifference,
+                                          "benchmarkStateDifference.dat", outputPath );
+    input_output::writeDataMapToTextFile( dependentVariablesDifference,
+                                          "benchmarkDependentDifference.dat", outputPath );
+
+    // Return the interpolators for the first benchmark (can be changed to the second if needed)
+    interpolators.push_back( firstStatesInterpolator );
+    interpolators.push_back( firstDependentInterpolator );
 
     return interpolators;
 }
@@ -226,18 +257,17 @@ int main()
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     bool generateAndCompareToBenchmark = true;
+    std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > benchmarkInterpolators;
     if( generateAndCompareToBenchmark )
     {
         std::shared_ptr< TranslationalStatePropagatorSettings< double > > benchmarkPropagatorSettings =
                 std::make_shared< TranslationalStatePropagatorSettings< double > >(
                     centralBodies, accelerationSettingsMap, bodiesToPropagate, systemInitialState,
                     terminationSettings, cowell, dependentVariablesToSave );
-        std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > benchmarkInterpolators =
-                generateBenchmarks(simulationStartEpoch, bodyMap, benchmarkPropagatorSettings, shapeParameters, outputPath);
+         benchmarkInterpolators = generateBenchmarks(simulationStartEpoch, bodyMap, benchmarkPropagatorSettings,
+                                                     shapeParameters, outputPath);
 
     }
-
-    // TODO: use benchmark compute difference w.r.t. all other runs
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             RUN SIMULATION FOR VARIOUS SETTINGS            ////////////////////////////////////
@@ -299,17 +329,55 @@ int main()
                 // Propagate trajectory using defined settings
                 prob.fitness( shapeParameters );
 
+                std::map< double, Eigen::VectorXd> stateHistory = prob.getLastRunPropagatedStateHistory( );
+                std::map< double, Eigen::VectorXd> dependentVariableHistory = prob.getLastRunDependentVariableHistory( );
+
                 // Save state and dependent variable results to file
-                input_output::writeDataMapToTextFile( prob.getLastRunPropagatedStateHistory( ),
+                input_output::writeDataMapToTextFile( stateHistory,
                                                       "stateHistory_test_"
                                                       + std::to_string( i ) + "_"
                                                       + std::to_string( j ) + "_"
                                                       + std::to_string( k ) + "_" + ".dat", outputPath );
-                input_output::writeDataMapToTextFile( prob.getLastRunDependentVariableHistory( ),
+                input_output::writeDataMapToTextFile( dependentVariableHistory,
                                                       "dependentVariables_test_"
                                                       + std::to_string( i ) + "_"
                                                       + std::to_string( j ) + "_"
                                                       + std::to_string( k ) + "_" + ".dat", outputPath );
+
+                // Compute difference w.r.t. benchmark using the interpolators we created
+                if( generateAndCompareToBenchmark )
+                {
+                    std::map< double, Eigen::VectorXd> stateDifference;
+                    std::map< double, Eigen::VectorXd> depVarDifference;
+
+                    for( auto stateIterator = stateHistory.begin(); stateIterator != stateHistory.end(); stateIterator++ )
+                    {
+                        stateDifference[ stateIterator->first ] = stateIterator->second - benchmarkInterpolators.at( 0 )->interpolate(
+                                    stateIterator->first );
+                    }
+
+                    for( auto depVarIterator = dependentVariableHistory.begin(); depVarIterator != dependentVariableHistory.end();
+                         depVarIterator++ )
+                    {
+                        depVarDifference[ depVarIterator->first ] = depVarIterator->second - benchmarkInterpolators.at( 1 )->interpolate(
+                                    depVarIterator->first );
+                    }
+
+                    // Write maps to files
+                    input_output::writeDataMapToTextFile( stateDifference,
+                                                          "stateDifferenceBenchmark_"
+                                                          + std::to_string( i ) + "_"
+                                                          + std::to_string( j ) + "_"
+                                                          + std::to_string( k ) + "_" + ".dat", outputPath );
+
+                    input_output::writeDataMapToTextFile( depVarDifference,
+                                                          "dependentVariablesDifferenceBenchmark_"
+                                                          + std::to_string( i ) + "_"
+                                                          + std::to_string( j ) + "_"
+                                                          + std::to_string( k ) + "_" + ".dat", outputPath );
+
+                }
+
             }
         }
     }
