@@ -51,6 +51,32 @@ std::shared_ptr< PropagationTerminationSettings > getPropagationTerminationSetti
     return std::make_shared< PropagationHybridTerminationSettings >( terminationSettingsList, true );
 }
 
+std::shared_ptr< IntegratorSettings< > > getIntegratorSettings( unsigned int j, int k, double simulationStartEpoch,
+                                                                std::vector< RungeKuttaCoefficients::CoefficientSets > multiStageTypes )
+{
+    // Create integrator settings (multi-stage variable-step)
+    if( j < 4 )
+    {
+        // Extract integrator type and tolerance for current run
+        RungeKuttaCoefficients::CoefficientSets currentCoefficientSet = multiStageTypes.at( j );
+        double currentTolerance = std::pow( 10.0, -14 + k );
+
+        // Create integrator settings
+        return std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
+                    simulationStartEpoch, 1.0, currentCoefficientSet,
+                    std::numeric_limits< double >::epsilon( ), std::numeric_limits< double >::infinity( ),
+                    currentTolerance, currentTolerance );
+
+    }
+    // Create integrator settings (multi-stage fixed-step)
+    else
+    {
+        // Create integrator settings
+        double timeStep = 0.1 * std::pow( 2, k );
+        return std::make_shared< IntegratorSettings< > >( rungeKutta4, simulationStartEpoch, timeStep );
+    }
+}
+
 std::shared_ptr< DependentVariableSaveSettings > getDependentVariableSaveSettings()
 {
     // Define dependent variables
@@ -120,6 +146,7 @@ void writePropagatorIntegratorIndicesToFile( std::string outputPath )
     propagatorIndices[5] = "USM MRP";
     propagatorIndices[6] = "USM Exponential Map";
 
+    // TODO: find another way to make this more robust/dynamic
     integratorIndices[0] = "RKF45";
     integratorIndices[1] = "RKF56";
     integratorIndices[2] = "RKF78";
@@ -263,34 +290,8 @@ int main()
                 std::cout<<"Current run "<<i<<" "<<j<<" "<<k<<std::endl;
 
                 // Define integrator settings
-                std::shared_ptr< IntegratorSettings< > > integratorSettings;
-
-                // Create integrator settings (multi-stage variable-step)
-                if( j < 4 )
-                {
-                    // Extract integrator type and tolerance for current run
-                    RungeKuttaCoefficients::CoefficientSets currentCoefficientSet = multiStageTypes.at( j );
-                    double currentTolerance = std::pow( 10.0, -14 + k );
-
-                    // CONVERT TO FUNCTION (j, k) -> INTEGRATOR SETTINGS OBJECT
-
-                    // Create integrator settings
-                    integratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
-                                simulationStartEpoch, 1.0, currentCoefficientSet,
-                                std::numeric_limits< double >::epsilon( ), std::numeric_limits< double >::infinity( ),
-                                currentTolerance, currentTolerance );
-
-                }
-                // Create integrator settings (multi-stage fixed-step)
-                else
-                {
-                    // Create integrator settings
-                    double timeStep = 0.1 * std::pow( 2, k );
-                    integratorSettings =
-                            std::make_shared< IntegratorSettings< > >
-                            ( rungeKutta4, simulationStartEpoch, timeStep );
-                }
-
+                std::shared_ptr< IntegratorSettings< > > integratorSettings =
+                        getIntegratorSettings( j, k, simulationStartEpoch, multiStageTypes );
 
                 // Construct problem
                 ShapeOptimizationProblem prob{ bodyMap, integratorSettings, propagatorSettings };
