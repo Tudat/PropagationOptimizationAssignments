@@ -121,6 +121,8 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
     std::map< double, Eigen::VectorXd > firstBenchmarkDependent = probBenchmarkFirst.getLastRunDependentVariableHistory( );
     std::map< double, Eigen::VectorXd > secondBenchmarkDependent = probBenchmarkSecond.getLastRunDependentVariableHistory( );
 
+    outputPath.append("/benchmarks/");
+
     input_output::writeDataMapToTextFile( firstBenchmarkStates,
                                           "benchmark1.dat", outputPath );
     input_output::writeDataMapToTextFile( secondBenchmarkStates,
@@ -307,6 +309,7 @@ int main()
         // Iterate over all types of integrators
         for( unsigned int j = 0; j < numberOfIntegrators; j++ )
         {
+
             // Change number of integrator settings for RK4
             if( j >= 4 )
             {
@@ -318,6 +321,10 @@ int main()
             {
                 // Print status
                 std::cout<<"Current run "<<i<<" "<<j<<" "<<k<<std::endl;
+
+                outputPath = tudat_applications::getOutputPath( "ShapeOptimization/" + std::to_string( i ) + "/" +
+                                                                std::to_string( j ) + "/" + std::to_string( k )
+                                                                + "/" );
 
                 // Define integrator settings
                 std::shared_ptr< IntegratorSettings< > > integratorSettings =
@@ -337,12 +344,12 @@ int main()
                                                       "stateHistory_test_"
                                                       + std::to_string( i ) + "_"
                                                       + std::to_string( j ) + "_"
-                                                      + std::to_string( k ) + "_" + ".dat", outputPath );
+                                                      + std::to_string( k ) + ".dat", outputPath );
                 input_output::writeDataMapToTextFile( dependentVariableHistory,
                                                       "dependentVariables_test_"
                                                       + std::to_string( i ) + "_"
                                                       + std::to_string( j ) + "_"
-                                                      + std::to_string( k ) + "_" + ".dat", outputPath );
+                                                      + std::to_string( k ) + ".dat", outputPath );
 
                 // Compute difference w.r.t. benchmark using the interpolators we created
                 if( generateAndCompareToBenchmark )
@@ -368,13 +375,24 @@ int main()
                                                           "stateDifferenceBenchmark_"
                                                           + std::to_string( i ) + "_"
                                                           + std::to_string( j ) + "_"
-                                                          + std::to_string( k ) + "_" + ".dat", outputPath );
+                                                          + std::to_string( k ) + ".dat", outputPath );
 
                     input_output::writeDataMapToTextFile( depVarDifference,
                                                           "dependentVariablesDifferenceBenchmark_"
                                                           + std::to_string( i ) + "_"
                                                           + std::to_string( j ) + "_"
-                                                          + std::to_string( k ) + "_" + ".dat", outputPath );
+                                                          + std::to_string( k ) + ".dat", outputPath );
+
+                    // Write number of function evaluations to files
+                    unsigned int numberOfEvaluations =
+                            prob.getLastRunDynamicsSimulator( )->getCumulativeNumberOfFunctionEvaluations( ).rbegin( )->second;
+
+                    // Beetje gebeund; elegantere oplossing?
+                    std::map< unsigned int, std::string > numberOfEvaluationsMap;
+                    numberOfEvaluationsMap[numberOfEvaluations] = "";
+                    input_output::writeDataMapToTextFile( numberOfEvaluationsMap,
+                                                          "numberOfFunctionEvaluations.dat",
+                                                          outputPath );
 
                 }
 
