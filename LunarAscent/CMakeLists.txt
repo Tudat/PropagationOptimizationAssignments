@@ -204,7 +204,7 @@ set(PROPAGATION_OPTIMIZATION_4_DYNAMICS_HEADERS
 add_library(tudat_application_propagation_optimization_4 STATIC ${PROPAGATION_OPTIMIZATION_4_DYNAMICS_SOURCES} ${PROPAGATION_OPTIMIZATION_4_DYNAMICS_HEADERS})
 setup_library_target(tudat_application_propagation_optimization_4 "${SRCROOT}")
 
-# Add helloWorld application.
+# Add Lunar Ascent application.
 add_executable(application_PropagationOptimizationLunarAscent "${SRCROOT}/propagationOptimizationLunarAscent.cpp")
 setup_executable_target(application_PropagationOptimizationLunarAscent "${SRCROOT}")
 target_link_libraries(application_PropagationOptimizationLunarAscent tudat_application_propagation_optimization_4 json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
