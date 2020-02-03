@@ -181,9 +181,17 @@ int main( )
     bodiesToPropagate.push_back( "Vehicle" );
     centralBodies.push_back( "Moon" );
 
-    // Create acceleration models and propagation settings.
-    basic_astrodynamics::AccelerationMap accelerationModelMap = createAccelerationModelsMap(
-                bodyMap, accelerationMap, bodiesToPropagate, centralBodies );
+    // Define propagator settings variables.
+    SelectedAccelerationMap accelerationSettingsMap;
+
+    // Define acceleration model settings.
+    std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfVehicle;
+    accelerationsOfVehicle[ "Moon" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
+    accelerationsOfVehicle[ "Vehicle" ].push_back(
+                getThrustAccelerationModelFromParameters(
+                        thrustParameters, bodyMap, initialTime, constantSpecificImpulse ) );
+    accelerationSettingsMap[ "Vehicle" ] = accelerationsOfVehicle;
+
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ///////////////////////             CREATE PROPAGATION SETTINGS            ////////////////////////////////////////////
@@ -243,23 +251,24 @@ int main( )
                 // Define translational state propagation settings
                 std::shared_ptr< TranslationalStatePropagatorSettings< double > > translationalStatePropagatorSettings =
                         std::make_shared< TranslationalStatePropagatorSettings< double > >(
-                            centralBodies, accelerationModelMap, bodiesToPropagate, systemInitialState,
+                            centralBodies, accelerationSettingsMap, bodiesToPropagate, systemInitialState,
                             terminationSettings, propagatorType );
 
                 // Define mass propagation settings
-                std::map< std::string, std::shared_ptr< basic_astrodynamics::MassRateModel > > massRateModels;
-                massRateModels[ "Vehicle" ] = (
-                            createMassRateModel( "Vehicle", std::make_shared< FromThrustMassModelSettings >( 1 ),
-                                                 bodyMap, accelerationModelMap ) );
+
+                simulation_setup::SelectedMassRateModelMap massRateModelSettings;
+                massRateModelSettings[ "Vehicle" ].push_back( std::make_shared< FromThrustMassModelSettings >( 1 ) );
+
                 std::shared_ptr< MassPropagatorSettings< double > > massPropagatorSettings =
                         std::make_shared< MassPropagatorSettings< double > >(
-                            std::vector< std::string >{ "Vehicle" }, massRateModels,
+                            std::vector< std::string >{ "Vehicle" }, massRateModelSettings,
                             ( Eigen::Matrix< double, 1, 1 >( ) << vehicleMass ).finished( ), terminationSettings );
 
                 // Define full propagation settings
                 std::vector< std::shared_ptr< SingleArcPropagatorSettings< double > > > propagatorSettingsVector =
                 { translationalStatePropagatorSettings, massPropagatorSettings };
-                std::shared_ptr< PropagatorSettings< double > > propagatorSettings =
+
+                std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings =
                         std::make_shared< MultiTypePropagatorSettings< double > >(
                             propagatorSettingsVector, terminationSettings, dependentVariablesToSave );
 
@@ -271,7 +280,7 @@ int main( )
                 ///////////////////////             PROPAGATE ORBIT            ////////////////////////////////////////////////////////
                 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-                LunarAscentProblem prob{ bodyMap, integratorSettings, propagatorSettings, initialTime };
+                LunarAscentProblem prob{ bodyMap, integratorSettings, propagatorSettings, initialTime, constantSpecificImpulse };
 
                 prob.fitness( thrustParameters );
 

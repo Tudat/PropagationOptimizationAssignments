@@ -10,25 +10,21 @@
 
 #include "lunarAscent.h"
 
-using namespace tudat_applications::PropagationOptimization2020;
-
-LunarAscentProblem::LunarAscentProblem( const simulation_setup::NamedBodyMap bodyMap,
-                                        const std::shared_ptr< IntegratorSettings< > > integratorSettings,
-                                        const std::shared_ptr< PropagatorSettings< double > > propagatorSettings,
-                                        const double initialTime ):
-    bodyMap_(bodyMap), integratorSettings_(integratorSettings), propagatorSettings_(propagatorSettings),
-    initialTime_(initialTime)
+namespace tudat_applications
+{
+namespace PropagationOptimization2020
 {
 
-}
-
-std::vector< double > LunarAscentProblem::fitness( std::vector< double >& thrustParameters ) const
+std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationModelFromParameters(
+        std::vector< double >& thrustParameters,
+        const simulation_setup::NamedBodyMap bodyMap,
+        const double initialTime,
+        const double constantSpecificImpulse )
 {
-
     // Define thrust functions
     std::shared_ptr< LunarAscentThrustGuidance > thrustGuidance =
             std::make_shared< LunarAscentThrustGuidance >(
-                bodyMap_.at( "Vehicle" ), initialTime_, thrustParameters );
+                bodyMap.at( "Vehicle" ), initialTime, thrustParameters );
     std::function< Eigen::Vector3d( const double ) > thrustDirectionFunction =
             std::bind( &LunarAscentThrustGuidance::getCurrentThrustDirection, thrustGuidance, std::placeholders::_1 );
     std::function< double( const double ) > thrustMagnitudeFunction =
@@ -39,22 +35,53 @@ std::vector< double > LunarAscentProblem::fitness( std::vector< double >& thrust
     std::shared_ptr< ThrustMagnitudeSettings > thrustMagnitudeSettings =
             std::make_shared< FromFunctionThrustMagnitudeSettings >(
                 thrustMagnitudeFunction, [ = ]( const double ){ return constantSpecificImpulse; } );
+    return std::make_shared< ThrustAccelerationSettings >(
+                thrustDirectionGuidanceSettings, thrustMagnitudeSettings );
 
 
-    // Define acceleration settings
-    SelectedAccelerationMap accelerationMap;
-    // Reset every time the fitness function is called
-    std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfVehicle;
-    accelerationsOfVehicle[ "Moon" ].push_back( std::make_shared< AccelerationSettings >(
-                                                    basic_astrodynamics::central_gravity ) );
+}
 
-    // Should be updated during each iteration (fitness function)
-    accelerationsOfVehicle[ "Vehicle" ].push_back( std::make_shared< ThrustAccelerationSettings >(
-                                                       thrustDirectionGuidanceSettings, thrustMagnitudeSettings ) );
-    accelerationMap[ "Vehicle" ] = accelerationsOfVehicle;
+}
 
+}
+
+using namespace tudat_applications::PropagationOptimization2020;
+
+LunarAscentProblem::LunarAscentProblem( const simulation_setup::NamedBodyMap bodyMap,
+                                        const std::shared_ptr< IntegratorSettings< > > integratorSettings,
+                                        const std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings,
+                                        const double initialTime,
+                                        const double constantSpecificImpulse ):
+    bodyMap_(bodyMap), integratorSettings_(integratorSettings), propagatorSettings_(propagatorSettings),
+    initialTime_(initialTime), constantSpecificImpulse_( constantSpecificImpulse )
+{
+    translationalStatePropagatorSettings_ =
+            std::dynamic_pointer_cast< TranslationalStatePropagatorSettings< double > >(
+                propagatorSettings_->propagatorSettingsMap_.at( translational_state ).at( 0 ) );
+}
+
+std::vector< double > LunarAscentProblem::fitness( std::vector< double >& thrustParameters ) const
+{
+    // Extract existing acceleration settings, and clear existing self-exerted accelerations of vehicle
+    simulation_setup::SelectedAccelerationMap accelerationSettings =
+            translationalStatePropagatorSettings_->getAccelerationSettingsMap( );
+    accelerationSettings[ "Vehicle" ][ "Vehicle" ].clear( );
+
+    // Retrieve new acceleration model for thrust and set in list of settings
+    std::shared_ptr< AccelerationSettings > newThrustSettings =
+            getThrustAccelerationModelFromParameters(
+                    thrustParameters, bodyMap_, initialTime_, constantSpecificImpulse_ );
+    accelerationSettings[ "Vehicle" ][ "Vehicle" ].push_back( newThrustSettings );
+
+    // Update translational propagatot settings
+    translationalStatePropagatorSettings_->resetAccelerationModelsMap(
+                accelerationSettings, bodyMap_ );
+
+    // Update full propagator settings
     propagatorSettings_->resetIntegratedStateModels( bodyMap_ );
 
     dynamicsSimulator_ = std::make_shared< SingleArcDynamicsSimulator< > >( bodyMap_, integratorSettings_, propagatorSettings_ );
+
+    return {0.0};
 
 }

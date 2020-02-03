@@ -35,6 +35,12 @@ namespace tudat_applications
 namespace PropagationOptimization2020
 {
 
+std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationModelFromParameters(
+        std::vector< double >& thrustParameters,
+        const simulation_setup::NamedBodyMap bodyMap,
+        const double initialTime,
+        const double constantSpecificImpulse );
+
 /*!
  *  Class to compute the thrust direction and magnitude for the lunar ascent vehicle. The current inputs set a
  *  constant thrust magnitude, and a thrust direction in y-(-z) plane of the vertical frame define linearly in time using
@@ -133,8 +139,9 @@ public:
     LunarAscentProblem(
             const simulation_setup::NamedBodyMap bodyMap,
             const std::shared_ptr< IntegratorSettings< > > integratorSettings,
-            const std::shared_ptr< PropagatorSettings< double > > propagatorSettings,
-            const double initialTime );
+            const std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings,
+            const double initialTime,
+            const double constantSpecificImpulse = 300.0 );
 
     // Standard constructor
     LunarAscentProblem( )
@@ -165,8 +172,12 @@ private:
 
     mutable simulation_setup::NamedBodyMap bodyMap_;
     std::shared_ptr< IntegratorSettings< > > integratorSettings_;
-    std::shared_ptr< PropagatorSettings< double > > propagatorSettings_;
-    const double initialTime_;
+    std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings_;
+    std::shared_ptr< TranslationalStatePropagatorSettings< double > > translationalStatePropagatorSettings_;
+
+
+    double initialTime_;
+    double constantSpecificImpulse_;
 
     mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
 
