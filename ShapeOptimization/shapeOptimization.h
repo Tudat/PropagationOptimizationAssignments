@@ -78,7 +78,8 @@ private:
 };
 
 
-
+//! Class containg the Pagmo-compatible formulation of the shape optimization problem.
+//!
 class ShapeOptimizationProblem
 {
 public:
@@ -106,8 +107,15 @@ public:
     }
 
 
-    // Fitness function; needs to adhere to Pagmo specifications
-    std::vector< double > fitness( std::vector< double >& x ) const;
+    //! Fitness function, called to run the simulation. In this form, it is compatible with
+    //! the Pagmo optimization library.
+    //! \param shapeParameters Decision vector, containing the shape parameters for which
+    //! the propagation needs to be run, to find the corresponding fitness value.
+    //! \return Returns the vector with doubles, describing the fitness belonging
+    //! to the shape parameters passed to the function. Currently returns an empty
+    //! vector.
+    //!
+    std::vector< double > fitness( std::vector< double >& shapeParameters ) const;
 
 
 

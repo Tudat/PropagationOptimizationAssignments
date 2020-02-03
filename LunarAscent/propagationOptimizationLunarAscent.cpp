@@ -12,7 +12,15 @@
 
 using namespace tudat_applications::PropagationOptimization2020;
 
-
+//! Function to retrieve the initial Cartesian state of the vehicle.
+/*!
+ * Function to retrieve the initial Cartesian state of the vehicle. The spherical orbital parameters are
+ * first converted to Cartesian coordinates and subsequently transformed to the global frame of reference.
+ *
+ * \param simulationStartEpoch The start time of the simulation in seconds.
+ * \param bodyMap NamedBodyMap containing the bodies in the simulation.
+ * \return Eigen Vector6d containing the system's initial state in Cartesian coordinates.
+ */
 Eigen::Vector6d getInitialState( double simulationStartEpoch, simulation_setup::NamedBodyMap bodyMap )
 {
     // Define initial spherical elements for vehicle.
@@ -41,6 +49,17 @@ Eigen::Vector6d getInitialState( double simulationStartEpoch, simulation_setup::
 
 }
 
+//! Get the propagation termination settings for the lunar ascent.
+/*!
+ * \param initialTime Start time of the simulation in seconds.
+ * \param maximumDuration Time in seconds, specifying the maximum time duration before which the
+ * simulation should stop.
+ * \param terminationAltitude Altitude in meters, specifying the maximum altitude before which the
+ * simulation should stop.
+ * \param vehicleDryMass Dry mass of the vehicle in kg. This is value is used to create a termination
+ * condition that mandates the simulation to stop once all fuel has been used up.
+ * \return Shared pointer to the PropagationTerminationSettings object.
+ */
 std::shared_ptr< PropagationTerminationSettings > getPropagationTerminationSettings( const double initialTime,
                                                                                      const double maximumDuration,
                                                                                      const double terminationAltitude,
@@ -63,6 +82,10 @@ std::shared_ptr< PropagationTerminationSettings > getPropagationTerminationSetti
 
 }
 
+//! Function to create two files, specifying which index belongs to which integrator and propagator.
+/*!
+ * \param outputPath String containing the path to the output directory.
+ */
 void writePropagatorIntegratorIndicesToFile( std::string outputPath )
 {
     std::map< unsigned int, std::string > propagatorIndices;

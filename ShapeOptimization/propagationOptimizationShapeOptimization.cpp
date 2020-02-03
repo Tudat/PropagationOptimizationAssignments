@@ -12,9 +12,17 @@
 
 using namespace tudat_applications::PropagationOptimization2020;
 
+//! Function to retrieve the initial Cartesian state of the vehicle.
+/*!
+ * Function to retrieve the initial Cartesian state of the vehicle. The spherical orbital parameters are
+ * first converted to Cartesian coordinates and subsequently transformed to the global frame of reference.
+ * \param simulationStartEpoch The start time of the simulation in seconds.
+ * \param bodyMap NamedBodyMap containing the bodies in the simulation.
+ * \return Eigen Vector6d containing the system's initial state in Cartesian coordinates.
+ */
 Eigen::Vector6d getInitialState( double simulationStartEpoch, simulation_setup::NamedBodyMap bodyMap )
 {
-    // Set spherical elements for Capsule.
+    // Set spherical elements for Capsule
     Eigen::Vector6d capsuleSphericalEntryState;
     capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::radiusIndex ) =
             spice_interface::getAverageRadius( "Earth" ) + 120.0E3;
@@ -28,7 +36,7 @@ Eigen::Vector6d getInitialState( double simulationStartEpoch, simulation_setup::
     capsuleSphericalEntryState( SphericalOrbitalStateElementIndices::headingAngleIndex ) =
             unit_conversions::convertDegreesToRadians( 34.37 );
 
-    // Set initial inertial Cartesian state
+    // Set initial inertial Cartesian state and convert to global frame of reference
     Eigen::Vector6d systemInitialState = convertSphericalOrbitalToCartesianState( capsuleSphericalEntryState );
     systemInitialState = transformStateToGlobalFrame(
                 systemInitialState, simulationStartEpoch, bodyMap.at( "Earth" )->getRotationalEphemeris( ) );
@@ -37,20 +45,42 @@ Eigen::Vector6d getInitialState( double simulationStartEpoch, simulation_setup::
 
 }
 
+//! Get the propagation termination settings for the shape optimization.
+/*!
+ * This function returns a shared pointer to a PropagationTerminationSettings object, containing
+ * altitude and time termination settings.
+ * \return Shared pointer to the PropagationTerminationSettings object.
+ */
 std::shared_ptr< PropagationTerminationSettings > getPropagationTerminationSettings()
 {
     // Define termination conditions
     std::vector< std::shared_ptr< PropagationTerminationSettings > > terminationSettingsList;
     std::shared_ptr< SingleDependentVariableSaveSettings > terminationDependentVariable =
             std::make_shared< SingleDependentVariableSaveSettings >( altitude_dependent_variable, "Capsule", "Earth" );
+    // Altitude termination condition
     terminationSettingsList.push_back(
                 std::make_shared< PropagationDependentVariableTerminationSettings >(
                     terminationDependentVariable, 25.0E3, true ) );
+    // Time termination condition
     terminationSettingsList.push_back( std::make_shared< PropagationTimeTerminationSettings >(
                                            24.0 * 3600.0 ) );
     return std::make_shared< PropagationHybridTerminationSettings >( terminationSettingsList, true );
 }
 
+//! Function to retrieve the integrator settings for the current run.
+/*!
+ * This function returns a shared pointer to an IntegratorSettings object, based on the indices passed to
+ * the function. The first index is used to determine which type is selected from the vector of integrator
+ * types which is passed as the last parameter. The seconds index determines what tolerance is used for the
+ * variable step size integrators.
+ * \param j Index specifying which kind of integrator is used: if smaller than 4, use a multi-stage,
+ * variable step size RKF or RK Dormand-Prince; otherwise, use an RK4 with fixed step size.
+ * \param k Index that is used to specify different tolerances for the same integrator. k = 0
+ * corresponds to 10^-14, k = 1 to 10^-13, etc.
+ * \param simulationStartEpoch The start time of the simulation in seconds.
+ * \param multiStageTypes std::vector with Runge-Kutta coefficient sets to use.
+ * \return Shared pointer to the IntegratorSettings object.
+ */
 std::shared_ptr< IntegratorSettings< > > getIntegratorSettings( unsigned int j, int k, double simulationStartEpoch,
                                                                 std::vector< RungeKuttaCoefficients::CoefficientSets > multiStageTypes )
 {
@@ -77,6 +107,12 @@ std::shared_ptr< IntegratorSettings< > > getIntegratorSettings( unsigned int j, 
     }
 }
 
+//! Function to retrieve the dependent variable save settings for the current simulation.
+/*!
+ * This function returns a shared pointer to a DependentVariableSaveSettings object, containing the save settings
+ * to save the Mach number and altitude of the capsule.
+ * \return Shared pointer to a DependentVariableSaveSettings object.
+ */
 std::shared_ptr< DependentVariableSaveSettings > getDependentVariableSaveSettings()
 {
     // Define dependent variables
@@ -88,6 +124,20 @@ std::shared_ptr< DependentVariableSaveSettings > getDependentVariableSaveSetting
     return std::make_shared< DependentVariableSaveSettings >( dependentVariablesList, false );
 }
 
+//! Function to generate to accurate benchmarks.
+/*!
+ * This function runs two propagations with two different integrator settings that serve as benchmarks for
+ * the nominal runs. To be able to compare these, the function returns the two interpolators pertaining
+ * to the state and dependent variables of one of the benchmarks. The states are written to files, as well
+ * as the difference in state and dependent variables between the two benchmarks.
+ * \param simulationStartEpoch The start time of the simulation in seconds.
+ * \param bodyMap NamedBodyMap containing the bodies in the simulation.
+ * \param benchmarkPropagatorSettings Shared pointer to a translational propagator settings object,
+ * which is used to run the benchmark propagations.
+ * \param shapeParameters The vector of doubles that represents the shape parameters for the capsule.
+ * \param outputPath String containing the path to the output directory.
+ * \return
+ */
 std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > generateBenchmarks(
         double simulationStartEpoch, simulation_setup::NamedBodyMap bodyMap,
         std::shared_ptr< TranslationalStatePropagatorSettings< double > > benchmarkPropagatorSettings,
@@ -120,9 +170,11 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
 
     std::map< double, Eigen::VectorXd > firstBenchmarkDependent = probBenchmarkFirst.getLastRunDependentVariableHistory( );
     std::map< double, Eigen::VectorXd > secondBenchmarkDependent = probBenchmarkSecond.getLastRunDependentVariableHistory( );
-
+\
+    // Put the benchmark data in a separate directory
     outputPath.append("/benchmarks/");
 
+    // Write the state maps of both benchmarks to files
     input_output::writeDataMapToTextFile( firstBenchmarkStates,
                                           "benchmark1.dat", outputPath );
     input_output::writeDataMapToTextFile( secondBenchmarkStates,
@@ -144,6 +196,7 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
     std::cout << "Calculating the difference between the benchmarks..." << std::endl;
     std::map< double, Eigen::VectorXd > statesDifference;
     std::map< double, Eigen::VectorXd > dependentVariablesDifference;
+
     // Calculate difference between two benchmarks, both for the states and the dependent variables
     for( auto iterator = firstBenchmarkStates.begin(); iterator != firstBenchmarkStates.end(); iterator++ )
     {
@@ -154,6 +207,7 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
         dependentVariablesDifference[ iterator->first ] = secondDependentInterpolator->interpolate( iterator->first ) - iterator->second;
     }
 
+    // Write the difference in state and dependent variables between the two benchmarks to files
     input_output::writeDataMapToTextFile( statesDifference,
                                           "benchmarkStateDifference.dat", outputPath );
     input_output::writeDataMapToTextFile( dependentVariablesDifference,
@@ -166,6 +220,10 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
     return interpolators;
 }
 
+//! Function to create two files, specifying which index belongs to which integrator and propagator.
+/*!
+ * \param outputPath String containing the path to the output directory.
+ */
 void writePropagatorIntegratorIndicesToFile( std::string outputPath )
 {
     std::map< unsigned int, std::string > propagatorIndices;
@@ -190,6 +248,37 @@ void writePropagatorIntegratorIndicesToFile( std::string outputPath )
     input_output::writeDataMapToTextFile( integratorIndices, "integrator_indices.txt", outputPath );
 }
 
+/*!
+ *   This function computes the dynamics of a capsule re-entering the atmosphere of the Earth, starting 120 km above the surface
+ *   of the planet, with a velocity of 7.83 km/s. This propagation assumes only point mass gravity and aerodynamic acceleration, providing
+ *   a baseline for further investigation. The shape of the capsule can be tweaked by the shape parameters to find the optimum
+ *   shape of the vehicle.
+ *
+ *   The trajectory of the capsule is heavily dependent on the shape of the vehicle, which is determined by the five shape parameters
+ *   that form the input for the simulation (see below). These parameters are used to compute the aerodynamic accelerations on the
+ *   vehicle (see also [PUBLICATION BY DOMINIC DIRKX, TODO]).
+ *
+ *   The propagation is terminated as soon as one of the following conditions is met:
+ *
+ *   - Altitude < 25 km
+ *   - Propagation time > 24 hr
+ *
+ *   Key outputs:
+ *
+ *   propagatedStateHistory Numerically propagated Cartesian state
+ *   dependentVariableHistory Dependent variables saved during the state propagation of the ascent *
+ *
+ *   Input parameters:
+ *
+ *   shapeParameters: Vector contains the following:
+ *
+ *   - Entry 0: TO BE SPECIFIED
+ *   - Entry 1: TO BE SPECIFIED
+ *   - Entry 2: TO BE SPECIFIED
+ *   - Entry 3: TO BE SPECIFIED
+ *   - Entry 4: TO BE SPECIFIED
+ *   - Entry 5: TO BE SPECIFIED
+ */
 int main()
 {
     // Load Spice kernels.
@@ -290,8 +379,6 @@ int main()
 
     writePropagatorIntegratorIndicesToFile( outputPath );
 
-    // TODO: Create separate folders for benchmarks, indices files, and runs (e.g. one folder for each propagator type)
-
     // Define number of settings to use
     const unsigned int numberOfPropagators = 7;
     const unsigned int numberOfIntegrators = 5;
@@ -383,11 +470,10 @@ int main()
                                                           + std::to_string( j ) + "_"
                                                           + std::to_string( k ) + ".dat", outputPath );
 
-                    // Write number of function evaluations to files
+                    // Write the number of function evaluations to a file for comparison of different integrators
                     unsigned int numberOfEvaluations =
                             prob.getLastRunDynamicsSimulator( )->getCumulativeNumberOfFunctionEvaluations( ).rbegin( )->second;
 
-                    // Beetje gebeund; elegantere oplossing?
                     std::map< unsigned int, std::string > numberOfEvaluationsMap;
                     numberOfEvaluationsMap[numberOfEvaluations] = "";
                     input_output::writeDataMapToTextFile( numberOfEvaluationsMap,

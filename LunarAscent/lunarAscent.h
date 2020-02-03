@@ -148,41 +148,64 @@ public:
     {
     }
 
+    //! Function to retrieve the map with the propagated state history of the last run
     std::map< double, Eigen::VectorXd > getLastRunPropagatedStateHistory( ) const
     {
         return dynamicsSimulator_->getEquationsOfMotionNumericalSolution( );
     }
+
+    //! Function to retrieve the map with the dependent variable history of the last run
     std::map< double, Eigen::VectorXd > getLastRunDependentVariableHistory( ) const
     {
         return dynamicsSimulator_->getDependentVariableHistory( );
     }
 
+    //! Function to retrieve a shared pointer to the dynamics simulator of the last run
     std::shared_ptr< SingleArcDynamicsSimulator< > > getLastRunDynamicsSimulator( )
     {
         return dynamicsSimulator_;
     }
 
 
-    // Fitness function; needs to adhere to Pagmo specifications
+    //! Fitness function, called to run the simulation. In this form, it is compatible with
+    //! the Pagmo optimization library.
+    //! \param shapeParameters Decision vector, containing the shape parameters for which
+    //! the propagation needs to be run, to find the corresponding fitness value.
+    //! \return Returns the vector with doubles, describing the fitness belonging
+    //! to the shape parameters passed to the function. Currently returns an empty
+    //! vector.
+    //!
     std::vector< double > fitness( std::vector< double >& x ) const;
 
 
 
 private:
 
+    //! Instance variable holding the body map for the simulation
     mutable simulation_setup::NamedBodyMap bodyMap_;
+
+    //! Object holding the integrator settings
     std::shared_ptr< IntegratorSettings< > > integratorSettings_;
+
+    //! Object holding the propagator settings
     std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings_;
+
+    //! Object holding the translational state propagator settings
     std::shared_ptr< TranslationalStatePropagatorSettings< double > > translationalStatePropagatorSettings_;
 
-
+    //! Instance variable containing the start epoch of the simulation
     double initialTime_;
+
+    //! Variable containing the constant specific impulse in seconds
     double constantSpecificImpulse_;
 
+    //! Object holding the dynamics simulator
     mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
 
-    // Make mutable so that they can be assigned to in a const class method
+    //! Map holding the propagated state history
     mutable std::map< double, Eigen::VectorXd > propagatedStateHistory;
+
+    //! Map holding the dependent variable history
     mutable std::map< double, Eigen::VectorXd > dependentVariableHistory;
 
 };
