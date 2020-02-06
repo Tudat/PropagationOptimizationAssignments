@@ -191,22 +191,22 @@ endif( )
 include(tudatLinkLibraries)
 
 # Set the source files.
-set(PROPAGATION_OPTIMIZATION_4_DYNAMICS_SOURCES
+set(PROPAGATION_OPTIMIZATION_LUNARASCENT_DYNAMICS_SOURCES
     "${SRCROOT}/lunarAscent.cpp"
 )
 
 # Set the header files.
-set(PROPAGATION_OPTIMIZATION_4_DYNAMICS_HEADERS
+set(PROPAGATION_OPTIMIZATION_LUNARASCENT_DYNAMICS_HEADERS
     "${SRCROOT}/lunarAscent.h"
 )
 
 # Add static libraries.
-add_library(tudat_application_propagation_optimization_4 STATIC ${PROPAGATION_OPTIMIZATION_4_DYNAMICS_SOURCES} ${PROPAGATION_OPTIMIZATION_4_DYNAMICS_HEADERS})
-setup_library_target(tudat_application_propagation_optimization_4 "${SRCROOT}")
+add_library(tudat_application_library_lunar_ascent STATIC ${PROPAGATION_OPTIMIZATION_LUNARASCENT_DYNAMICS_SOURCES} ${PROPAGATION_OPTIMIZATION_LUNARASCENT_DYNAMICS_HEADERS})
+setup_library_target(tudat_application_library_lunar_ascent "${SRCROOT}")
 
 # Add Lunar Ascent application.
 add_executable(application_PropagationOptimizationLunarAscent "${SRCROOT}/propagationOptimizationLunarAscent.cpp")
 setup_executable_target(application_PropagationOptimizationLunarAscent "${SRCROOT}")
-target_link_libraries(application_PropagationOptimizationLunarAscent tudat_application_propagation_optimization_4 json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
+target_link_libraries(application_PropagationOptimizationLunarAscent tudat_application_library_lunar_ascent json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
 
 

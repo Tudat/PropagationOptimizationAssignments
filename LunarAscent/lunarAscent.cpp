@@ -15,6 +15,7 @@ namespace tudat_applications
 namespace PropagationOptimization2020
 {
 
+//! Function that generates thrust acceleration model from thrust parameters
 std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationModelFromParameters(
         std::vector< double >& thrustParameters,
         const simulation_setup::NamedBodyMap bodyMap,
@@ -50,10 +51,9 @@ using namespace tudat_applications::PropagationOptimization2020;
 LunarAscentProblem::LunarAscentProblem( const simulation_setup::NamedBodyMap bodyMap,
                                         const std::shared_ptr< IntegratorSettings< > > integratorSettings,
                                         const std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings,
-                                        const double initialTime,
                                         const double constantSpecificImpulse ):
     bodyMap_(bodyMap), integratorSettings_(integratorSettings), propagatorSettings_(propagatorSettings),
-    initialTime_(initialTime), constantSpecificImpulse_( constantSpecificImpulse )
+    constantSpecificImpulse_( constantSpecificImpulse )
 {
     translationalStatePropagatorSettings_ =
             std::dynamic_pointer_cast< TranslationalStatePropagatorSettings< double > >(
@@ -70,7 +70,7 @@ std::vector< double > LunarAscentProblem::fitness( std::vector< double >& thrust
     // Retrieve new acceleration model for thrust and set in list of settings
     std::shared_ptr< AccelerationSettings > newThrustSettings =
             getThrustAccelerationModelFromParameters(
-                    thrustParameters, bodyMap_, initialTime_, constantSpecificImpulse_ );
+                    thrustParameters, bodyMap_, integratorSettings_->initialTime_, constantSpecificImpulse_ );
     accelerationSettings[ "Vehicle" ][ "Vehicle" ].push_back( newThrustSettings );
 
     // Update translational propagatot settings

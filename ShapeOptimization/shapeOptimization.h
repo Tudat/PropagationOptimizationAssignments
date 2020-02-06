@@ -33,20 +33,24 @@ namespace tudat_applications
 namespace PropagationOptimization2020
 {
 
+//! Function that creates an aerodynamic database for a capsule, based on a set of shape parameters (see .cpp file for details)
 std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInterface(
         const std::shared_ptr< geometric_shapes::Capsule > capsule,
         const std::string directory,
-        const std::string filePrefix,
-        const bool useNewtonianMethodForAllPanels = true );
+        const std::string filePrefix );
 
+//! Function to set Capsule properties related to vehicle shape (mass, aerodynamic coefficients)
 void setVehicleShapeParameters(
         std::vector< double > shapeParameters,
-        const NamedBodyMap& bodyMap );
+        const NamedBodyMap& bodyMap,
+        const double vehicleDensity );
 
+//! Function to add the Capsule, and associated shape properties, to the body map.
 void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
-                          std::vector< double >& shapeParameters );
+                          std::vector< double >& shapeParameters,
+                          const double vehicleDensity );
 
-//! Class to set the aerodynamic angles of the capsule (default: all angles 0)
+//! Class to set the aerodynamic angles of the capsule (default: all angles 0, angle-of-attack constant at given value)
 class CapsuleAerodynamicGuidance: public aerodynamics::AerodynamicGuidance
 {
 public:
@@ -84,52 +88,74 @@ class ShapeOptimizationProblem
 {
 public:
 
-    // Constructor
+    //! Constructor for the problem class
+    /*!
+     * Constructor for the problem class
+     * \param bodyMap List of body objects
+     * \param integratorSettings Settings for numerical integrator
+     * \param propagatorSettings Settings for propagation of translational state
+     * \param vehicleDensity Density of vehicle, used to compute mass from vehicle shape
+     */
     ShapeOptimizationProblem(
             const simulation_setup::NamedBodyMap bodyMap,
             const std::shared_ptr< IntegratorSettings< > > integratorSettings,
-            const std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings );
+            const std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings,
+            const double vehicleDensity ):
+        bodyMap_( bodyMap ), integratorSettings_( integratorSettings ),propagatorSettings_( propagatorSettings ),
+        vehicleDensity_( vehicleDensity ){ }
 
-    ShapeOptimizationProblem( );
+    //! Default constructor
+    ShapeOptimizationProblem( ){ }
 
+    //! Function to retrieve the map with the propagated state history computed at last call of fitness function
     std::map< double, Eigen::VectorXd > getLastRunPropagatedStateHistory( ) const
     {
         return dynamicsSimulator_->getEquationsOfMotionNumericalSolution( );
     }
+
+    //! Function to retrieve the map with the dependent variable history computed at last call of fitness function
     std::map< double, Eigen::VectorXd > getLastRunDependentVariableHistory( ) const
     {
         return dynamicsSimulator_->getDependentVariableHistory( );
     }
 
+    //! Function to the dynamics simulator, as created during last call of fitness function
     std::shared_ptr< SingleArcDynamicsSimulator< > > getLastRunDynamicsSimulator( )
     {
         return dynamicsSimulator_;
     }
 
 
-    //! Fitness function, called to run the simulation. In this form, it is compatible with
-    //! the Pagmo optimization library.
-    //! \param shapeParameters Decision vector, containing the shape parameters for which
-    //! the propagation needs to be run, to find the corresponding fitness value.
-    //! \return Returns the vector with doubles, describing the fitness belonging
-    //! to the shape parameters passed to the function. Currently returns an empty
-    //! vector.
-    //!
+    //! Function to compute propagate the dynamics of the capsule defined by the shapeParameters
+    /*!
+     *  Function to compute propagate the dynamics of the capsule defined by the shapeParameters. This function updates
+     *  all relevant settings and properties to the new values of these parameters.
+     *
+     *  NOTE: Presently no fitness is computed, this must be modified during the group assignment
+     *
+     *  \param thrustParameters Values of parameters defining the shape and orientation of capsule (see main function)
+     *  \return Fitness (undefined)
+     */
     std::vector< double > fitness( std::vector< double >& shapeParameters ) const;
 
 
 
 private:
 
+    //! Variable holding the body map for the simulation
     mutable simulation_setup::NamedBodyMap bodyMap_;
+
+    //! Object holding the integrator settings
     std::shared_ptr< IntegratorSettings< > > integratorSettings_;
+
+    //! Object holding the propagator settings
     std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings_;
 
-    mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
+    //! Density of vehicle, used to compute mass from vehicle shape
+    double vehicleDensity_;
 
-    // Make mutable so that they can be assigned to in a const class method
-    mutable std::map< double, Eigen::VectorXd > propagatedStateHistory;
-    mutable std::map< double, Eigen::VectorXd > dependentVariableHistory;
+    //! Object holding the dynamics simulator, as created during last call of fitness function
+    mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
 
 };
 

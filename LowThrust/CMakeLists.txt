@@ -191,22 +191,22 @@ endif( )
 include(tudatLinkLibraries)
 
 # Set the source files.
-set(PROPAGATION_OPTIMIZATION_3_DYNAMICS_SOURCES
-    "${SRCROOT}/highThrustTransfer.cpp"
+set(PROPAGATION_OPTIMIZATION_LOWTHRUST_DYNAMICS_SOURCES
+    "${SRCROOT}/lowThrust.cpp"
 )
 
 # Set the header files.
-set(PROPAGATION_OPTIMIZATION_3_DYNAMICS_HEADERS
-    "${SRCROOT}/highThrustTransfer.h"
+set(PROPAGATION_OPTIMIZATION_LOWTHRUST_DYNAMICS_HEADERS
+    "${SRCROOT}/lowThrust.h"
 )
 
 # Add static libraries.
-add_library(tudat_application_propagation_optimization_3 STATIC ${PROPAGATION_OPTIMIZATION_3_DYNAMICS_SOURCES} ${PROPAGATION_OPTIMIZATION_3_DYNAMICS_HEADERS})
-setup_library_target(tudat_application_propagation_optimization_3 "${SRCROOT}")
+add_library(tudat_application_library_low_thrust STATIC ${PROPAGATION_OPTIMIZATION_LOWTHRUST_DYNAMICS_SOURCES} ${PROPAGATION_OPTIMIZATION_LOWTHRUST_DYNAMICS_HEADERS})
+setup_library_target(tudat_application_library_low_thrust "${SRCROOT}")
 
 # Add helloWorld application.
-add_executable(application_PropagationOptimizationHighThrustTransfer "${SRCROOT}/propagationOptimizationHighThrustTransfer.cpp")
-setup_executable_target(application_PropagationOptimizationHighThrustTransfer "${SRCROOT}")
-target_link_libraries(application_PropagationOptimizationHighThrustTransfer tudat_application_propagation_optimization_3 json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
+add_executable(application_PropagationOptimizationLowThrust "${SRCROOT}/propagationOptimizationLowThrust.cpp" )
+setup_executable_target(application_PropagationOptimizationLowThrust "${SRCROOT}")
+target_link_libraries(application_PropagationOptimizationLowThrust tudat_application_library_low_thrust tudat_low_thrust_trajectories tudat_shape_based_methods tudat_numerical_quadrature json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
 
 

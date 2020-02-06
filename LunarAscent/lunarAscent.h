@@ -35,6 +35,7 @@ namespace tudat_applications
 namespace PropagationOptimization2020
 {
 
+//! Function that generates thrust acceleration model from thrust parameters
 std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationModelFromParameters(
         std::vector< double >& thrustParameters,
         const simulation_setup::NamedBodyMap bodyMap,
@@ -135,53 +136,59 @@ class LunarAscentProblem
 {
 public:
 
-    // Constructor that we will actually use
+    //! Constructor for the problem class
+    /*!
+     * Constructor for the problem class
+     * \param bodyMap List of body objects
+     * \param integratorSettings Settings for numerical integrator
+     * \param propagatorSettings Settings for propagation of translational state and mass
+     * \param constantSpecificImpulse Constant specific impulse of thrust
+     */
     LunarAscentProblem(
             const simulation_setup::NamedBodyMap bodyMap,
             const std::shared_ptr< IntegratorSettings< > > integratorSettings,
             const std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings,
-            const double initialTime,
             const double constantSpecificImpulse = 300.0 );
 
-    // Standard constructor
-    LunarAscentProblem( )
-    {
-    }
+    //! Default constructor
+    LunarAscentProblem( ){ }
 
-    //! Function to retrieve the map with the propagated state history of the last run
+    //! Function to retrieve the map with the propagated state history computed at last call of fitness function
     std::map< double, Eigen::VectorXd > getLastRunPropagatedStateHistory( ) const
     {
         return dynamicsSimulator_->getEquationsOfMotionNumericalSolution( );
     }
 
-    //! Function to retrieve the map with the dependent variable history of the last run
+    //! Function to retrieve the map with the dependent variable history computed at last call of fitness function
     std::map< double, Eigen::VectorXd > getLastRunDependentVariableHistory( ) const
     {
         return dynamicsSimulator_->getDependentVariableHistory( );
     }
 
-    //! Function to retrieve a shared pointer to the dynamics simulator of the last run
+    //! Function to the dynamics simulator, as created during last call of fitness function
     std::shared_ptr< SingleArcDynamicsSimulator< > > getLastRunDynamicsSimulator( )
     {
         return dynamicsSimulator_;
     }
 
 
-    //! Fitness function, called to run the simulation. In this form, it is compatible with
-    //! the Pagmo optimization library.
-    //! \param shapeParameters Decision vector, containing the shape parameters for which
-    //! the propagation needs to be run, to find the corresponding fitness value.
-    //! \return Returns the vector with doubles, describing the fitness belonging
-    //! to the shape parameters passed to the function. Currently returns an empty
-    //! vector.
-    //!
-    std::vector< double > fitness( std::vector< double >& x ) const;
+    //! Function to compute propagate the dynamics of the vehicle defined by the thrustParameters
+    /*!
+     *  Function to compute propagate the dynamics of the vehicle defined by the thrustParameters. This function updates
+     *  all relevant settings and properties to the new values of these parameters.
+     *
+     *  NOTE: Presently no fitness is computed, this must be modified during the group assignment
+     *
+     *  \param thrustParameters Values of parameters defining the thrust profile (see main function)
+     *  \return Fitness (undefined)
+     */
+    std::vector< double > fitness( std::vector< double >& thrustParameters ) const;
 
 
 
 private:
 
-    //! Instance variable holding the body map for the simulation
+    //! Variable holding the body map for the simulation
     mutable simulation_setup::NamedBodyMap bodyMap_;
 
     //! Object holding the integrator settings
@@ -190,24 +197,14 @@ private:
     //! Object holding the propagator settings
     std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings_;
 
-    //! Object holding the translational state propagator settings
+    //! Object holding the translational state propagator settings (part of the propagatorSettings_)
     std::shared_ptr< TranslationalStatePropagatorSettings< double > > translationalStatePropagatorSettings_;
-
-    //! Instance variable containing the start epoch of the simulation
-    double initialTime_;
 
     //! Variable containing the constant specific impulse in seconds
     double constantSpecificImpulse_;
 
-    //! Object holding the dynamics simulator
+    //! Object holding the dynamics simulator, as created during last call of fitness function
     mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
-
-    //! Map holding the propagated state history
-    mutable std::map< double, Eigen::VectorXd > propagatedStateHistory;
-
-    //! Map holding the dependent variable history
-    mutable std::map< double, Eigen::VectorXd > dependentVariableHistory;
-
 };
 
 } // Namespace tudat_applications

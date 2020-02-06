@@ -22,13 +22,12 @@ namespace PropagationOptimization2020
  *  shoulder/edge, a conical frustum for the rear body, and a sphere segment for the rear cap (see Dirkx and Mooij, 2016).
  *  The code used in this function discretizes these surfaces into a structured mesh of quadrilateral panels. The parameters
  *  numberOfPoints and numberOfLines define the number of discretization points (for each part) in both independent directions
- *  (lengthwise and circumferential).
+ *  (lengthwise and circumferential). The list selectedMethods defines the type of aerodynamic analysis method that is used.
  */
 std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInterface(
         const std::shared_ptr< geometric_shapes::Capsule > capsule,
         const std::string directory,
-        const std::string filePrefix,
-        const bool useNewtonianMethodForAllPanels )
+        const std::string filePrefix )
 {
 
     // Define settings for surface discretization of capsule
@@ -78,28 +77,15 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
     selectedMethods.resize( 2 );
     selectedMethods[ 0 ].resize( 4 );
     selectedMethods[ 1 ].resize( 4 );
-    if( !useNewtonianMethodForAllPanels )
-    {
-        selectedMethods[ 0 ][ 0 ] = 1;
-        selectedMethods[ 0 ][ 1 ] = 5;
-        selectedMethods[ 0 ][ 2 ] = 5;
-        selectedMethods[ 0 ][ 3 ] = 1;
-        selectedMethods[ 1 ][ 0 ] = 6;
-        selectedMethods[ 1 ][ 1 ] = 3;
-        selectedMethods[ 1 ][ 2 ] = 3;
-        selectedMethods[ 1 ][ 3 ] = 3;
-    }
-    else
-    {
-        selectedMethods[ 0 ][ 0 ] = 0;
-        selectedMethods[ 0 ][ 1 ] = 0;
-        selectedMethods[ 0 ][ 2 ] = 0;
-        selectedMethods[ 0 ][ 3 ] = 0;
-        selectedMethods[ 1 ][ 0 ] = 0;
-        selectedMethods[ 1 ][ 1 ] = 0;
-        selectedMethods[ 1 ][ 2 ] = 0;
-        selectedMethods[ 1 ][ 3 ] = 0;
-    }
+
+    selectedMethods[ 0 ][ 0 ] = 0;
+    selectedMethods[ 0 ][ 1 ] = 0;
+    selectedMethods[ 0 ][ 2 ] = 0;
+    selectedMethods[ 0 ][ 3 ] = 0;
+    selectedMethods[ 1 ][ 0 ] = 0;
+    selectedMethods[ 1 ][ 1 ] = 0;
+    selectedMethods[ 1 ][ 2 ] = 0;
+    selectedMethods[ 1 ][ 3 ] = 0;
 
     // Create aerodynamic database
     std::shared_ptr< HypersonicLocalInclinationAnalysis > hypersonicLocalInclinationAnalysis =
@@ -116,10 +102,13 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
     return  hypersonicLocalInclinationAnalysis;
 }
 
+//! Function to set vehicle properties related to vehicle shape (mass, aerodynamic coefficients)
 void setVehicleShapeParameters(
         std::vector< double > shapeParameters,
-        const NamedBodyMap& bodyMap )
+        const NamedBodyMap& bodyMap,
+        const double vehicleDensity )
 {
+    // Apply shape constraint
     double limitLength = ( shapeParameters[ 1 ] - shapeParameters[ 4 ] * ( 1.0 - std::cos( shapeParameters[ 3 ] ) ) ) /
             std::tan( -shapeParameters[ 3 ] );
     if( shapeParameters[ 2 ] >= limitLength - 0.01 )
@@ -134,24 +123,25 @@ void setVehicleShapeParameters(
             shapeParameters[ 3 ], shapeParameters[ 4 ] );
 
     // Vehicle properties
-    double vehicleDensity = 250.0;
     bodyMap.at( "Capsule" )->setConstantBodyMass(
                 capsule->getVolume( ) * vehicleDensity );
 
     // Create vehicle aerodynamic coefficients
     bodyMap.at( "Capsule" )->setAerodynamicCoefficientInterface(
                 getCapsuleCoefficientInterface(
-                    capsule, tudat_applications::getOutputPath( "ShapeOptimization" ), "output_", true ) );
+                    capsule, tudat_applications::getOutputPath( "ShapeOptimization" ), "output_" ) );
 
 
 }
 
+//! Function to add the Capsule, and associated shape properties, to the body map.
 void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
-                          std::vector< double >& shapeParameters )
+                          std::vector< double >& shapeParameters,
+                          const double vehicleDensity  )
 {
     // Create vehicle objects.
     bodyMap[ "Capsule" ] = std::make_shared< simulation_setup::Body >( );
-    setVehicleShapeParameters( shapeParameters, bodyMap );
+    setVehicleShapeParameters( shapeParameters, bodyMap, vehicleDensity );
 
     // Finalize body creation.
     setGlobalFrameBodyEphemerides( bodyMap, "Earth", "J2000" );
@@ -162,27 +152,13 @@ void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
 
 }
 
-ShapeOptimizationProblem::ShapeOptimizationProblem(
-        const simulation_setup::NamedBodyMap bodyMap,
-        const std::shared_ptr< IntegratorSettings< > > integratorSettings,
-        const std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings ):
-    bodyMap_( bodyMap ), integratorSettings_( integratorSettings ),propagatorSettings_( propagatorSettings )
-{
 
-}
-
-// Constructor
-ShapeOptimizationProblem::ShapeOptimizationProblem()
-{
-
-}
-
-// The const identifier is really annoying (but required by Pagmo), as we cannot set class member fields or call non-const functions to set them for us
+//! Function to compute propagate the dynamics of the capsule defined by given shapeParameters, and compute its fitness (undefined)
 std::vector< double > ShapeOptimizationProblem::fitness( std::vector< double >& shapeParameters) const
 {
     // Recreate capsule body with new shape parameters
     bodyMap_.at( "Capsule" ).reset( );
-    addCapsuleToBodyMap( bodyMap_, shapeParameters );
+    addCapsuleToBodyMap( bodyMap_, shapeParameters, vehicleDensity_ );
 
     // Reset propagation and guidance models
     propagatorSettings_->resetIntegratedStateModels( bodyMap_ );
