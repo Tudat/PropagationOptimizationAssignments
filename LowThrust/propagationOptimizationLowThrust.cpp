@@ -201,6 +201,8 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
     // Write the state maps of both benchmarks to files
     input_output::writeDataMapToTextFile( firstBenchmarkStates, "benchmark1.dat", outputPath );
     input_output::writeDataMapToTextFile( secondBenchmarkStates, "benchmark2.dat", outputPath );
+    input_output::writeDataMapToTextFile( firstBenchmarkDependent, "benchmarkDependent_1.dat", outputPath );
+    input_output::writeDataMapToTextFile( secondBenchmarkDependent, "benchmarkDependent_2.dat", outputPath );
 
     // Create 8th-order Lagrange interpolators for states and dependent variables of both runs
     std::shared_ptr< InterpolatorSettings > interpolatorSettings = std::make_shared< LagrangeInterpolatorSettings >( 8 );
