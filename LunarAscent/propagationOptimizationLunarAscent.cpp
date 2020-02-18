@@ -289,7 +289,7 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
  *   - Altitude > 100 km
  *   - Altitude < 0 km
  *   - Propagation time > 3600 s
- *   - Vehicle mass < 1000 kg
+ *   - Vehicle mass < 2250 kg
  *
  *  This propagation assumes only point mass gravity by the Moon and thrust acceleration of the vehicle
  *  (see block 'CREATE ACCELERATIONS'). Both the translational dynamics and mass of the vehicle are propagated,
