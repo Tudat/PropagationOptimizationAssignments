@@ -110,7 +110,8 @@ public:
             double specificImpulse,
             double minimumMarsDistance,
             double timeBuffer,
-            const bool performPropagation = true );
+            const bool performPropagation = true,
+            const Eigen::Vector3d initialPositionPerturbation =  Eigen::Vector3d::Zero( ) );
 
     //! Default constructor
     LowThrustProblem( ){ }
@@ -182,6 +183,7 @@ private:
     //! Object holding the dynamics simulator, as created during last call of fitness function
     mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
 
+    Eigen::Vector3d initialPositionPerturbation_;
 
 };
 

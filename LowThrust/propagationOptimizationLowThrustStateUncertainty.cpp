@@ -315,94 +315,101 @@ int main( )
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd > >  benchmarkStateInterpolator;
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd >  >  benchmarkDependentInterpolator;
 
-    for( int i = 0; i < 3; i++ )
+    // Create solar system bodies
+    std::vector< std::string > bodiesToCreate;
+    bodiesToCreate.push_back( "Earth" );
+    bodiesToCreate.push_back( "Mars" );
+    bodiesToCreate.push_back( "Sun" );
+    bodiesToCreate.push_back( "Earth" );
+    bodiesToCreate.push_back( "Mars" );
+
+    std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
+            getDefaultBodySettings( bodiesToCreate );
+    NamedBodyMap bodyMap = createBodies( bodySettings );
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////             CREATE VEHICLE            /////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Create spacecraft object.
+    bodyMap[ "Vehicle" ] = std::make_shared< simulation_setup::Body >( );
+    bodyMap[ "Vehicle" ]->setConstantBodyMass( vehicleMass );
+
+    // Finalize body creation.
+    setGlobalFrameBodyEphemerides( bodyMap, "SSB", "ECLIPJ2000" );
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Define propagator settings variables.
+    SelectedAccelerationMap accelerationSettingsMap;
+
+    // Define acceleration model settings.
+    std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfVehicle;
+    accelerationsOfVehicle[ "Sun" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
+    accelerationsOfVehicle[ "Vehicle" ].push_back(
+                getThrustAccelerationSettingsFromParameters( trajectoryParameters, bodyMap ) );
+
+    accelerationSettingsMap[ "Vehicle" ] = accelerationsOfVehicle;
+
+    // Define propagator settings variables.
+    std::vector< std::string > bodiesToPropagate;
+    std::vector< std::string > centralBodies;
+    bodiesToPropagate.push_back( "Vehicle" );
+    centralBodies.push_back( "Sun" );
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////   RETRIEVE DATA FOR PROPAGATION SETTINGS            ///////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    double initialPropagationTime = getTrajectoryInitialTime( trajectoryParameters, timeBuffer );
+    std::shared_ptr< PropagationTerminationSettings > terminationSettings = getPropagationTerminationSettings(
+                trajectoryParameters, minimumMarsDistance, 0.0 );
+    std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave = getDependentVariableSaveSettings();
+    Eigen::Vector6d systemInitialState = getHodographicLowThrustStateAtEpoch(
+                trajectoryParameters, bodyMap, initialPropagationTime );
+
+
+    // Create propagator settings for mass (constant for all simulations)
+    simulation_setup::SelectedMassRateModelMap massRateModelSettings;
+    massRateModelSettings[ "Vehicle" ].push_back( std::make_shared< FromThrustMassModelSettings >( 1 ) );
+    std::shared_ptr< MassPropagatorSettings< double > > massPropagatorSettings =
+            std::make_shared< MassPropagatorSettings< double > >(
+                std::vector< std::string >{ "Vehicle" }, massRateModelSettings,
+                ( Eigen::Matrix< double, 1, 1 >( ) << vehicleMass ).finished( ), terminationSettings );
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////             RUN SIMULATION FOR VARIOUS SETTINGS            ////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    std::function< double( ) > positionPerturbationFunction =
+            statistics::createBoostContinuousRandomVariableGeneratorFunction(
+                statistics::normal_boost_distribution, boost::assign::list_of( 0 )( 100.0 ), 0.0 );
+
+    for( int i = 0; i < 100; i++ )
     {
-        std::string outputPath = tudat_applications::getOutputPath( "LowThrustAssignment2/" + std::to_string( i ) );
+        std::string outputPath = tudat_applications::getOutputPath( "LowThrustAssignment2Uncertainty/" + std::to_string( i ) );
 
-        // Create solar system bodies
-        std::vector< std::string > bodiesToCreate;
-        bodiesToCreate.push_back( "Earth" );
-        bodiesToCreate.push_back( "Mars" );
-        bodiesToCreate.push_back( "Sun" );
-        bodiesToCreate.push_back( "Earth" );
-        bodiesToCreate.push_back( "Mars" );
-
-        std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
-                getDefaultBodySettings( bodiesToCreate );
-        NamedBodyMap bodyMap = createBodies( bodySettings );
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////             CREATE VEHICLE            /////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        // Create spacecraft object.
-        bodyMap[ "Vehicle" ] = std::make_shared< simulation_setup::Body >( );
-        bodyMap[ "Vehicle" ]->setConstantBodyMass( vehicleMass );
-
-        // Finalize body creation.
-        setGlobalFrameBodyEphemerides( bodyMap, "SSB", "ECLIPJ2000" );
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        // Define propagator settings variables.
-        SelectedAccelerationMap accelerationSettingsMap;
-
-        // Define acceleration model settings.
-        std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfVehicle;
-        accelerationsOfVehicle[ "Sun" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
-
-        accelerationsOfVehicle[ "Vehicle" ].push_back(
-                    getThrustAccelerationSettingsFromParameters( trajectoryParameters, bodyMap ) );
-        if( i == 1 )
+        Eigen::Vector3d positionPerturbation = Eigen::Vector3d::Zero( );
+        if( i != 0 )
         {
-            accelerationsOfVehicle[ "Earth" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
-        }
-        else if( i == 2 )
-        {
-            accelerationsOfVehicle[ "Mars" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
+            positionPerturbation( 0 ) += positionPerturbationFunction( );
+            positionPerturbation( 1 ) += positionPerturbationFunction( );
+            positionPerturbation( 2 ) += positionPerturbationFunction( );
         }
 
-        accelerationSettingsMap[ "Vehicle" ] = accelerationsOfVehicle;
+        Eigen::Vector6d perturbedInitialState = systemInitialState;
+        perturbedInitialState.segment( 0, 3 ) += positionPerturbation;
 
-        // Define propagator settings variables.
-        std::vector< std::string > bodiesToPropagate;
-        std::vector< std::string > centralBodies;
-        bodiesToPropagate.push_back( "Vehicle" );
-        centralBodies.push_back( "Sun" );
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////   RETRIEVE DATA FOR PROPAGATION SETTINGS            ///////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        double initialPropagationTime = getTrajectoryInitialTime( trajectoryParameters, timeBuffer );
-        std::shared_ptr< PropagationTerminationSettings > terminationSettings = getPropagationTerminationSettings(
-                    trajectoryParameters, minimumMarsDistance, 0.0 );
-        std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave = getDependentVariableSaveSettings();
-        Eigen::Vector6d systemInitialState = getHodographicLowThrustStateAtEpoch(
-                    trajectoryParameters, bodyMap, initialPropagationTime );
-
-
-        // Create propagator settings for mass (constant for all simulations)
-        simulation_setup::SelectedMassRateModelMap massRateModelSettings;
-        massRateModelSettings[ "Vehicle" ].push_back( std::make_shared< FromThrustMassModelSettings >( 1 ) );
-        std::shared_ptr< MassPropagatorSettings< double > > massPropagatorSettings =
-                std::make_shared< MassPropagatorSettings< double > >(
-                    std::vector< std::string >{ "Vehicle" }, massRateModelSettings,
-                    ( Eigen::Matrix< double, 1, 1 >( ) << vehicleMass ).finished( ), terminationSettings );
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////             RUN SIMULATION FOR VARIOUS SETTINGS            ////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        std::cout<<( perturbedInitialState - systemInitialState ).transpose( )<<std::endl;
 
         // Define translational state propagation settings
         TranslationalPropagatorType propagatorType = cowell;
         std::shared_ptr< TranslationalStatePropagatorSettings< double > > translationalStatePropagatorSettings =
                 std::make_shared< TranslationalStatePropagatorSettings< double > >(
-                    centralBodies, accelerationSettingsMap, bodiesToPropagate, systemInitialState,
+                    centralBodies, accelerationSettingsMap, bodiesToPropagate, perturbedInitialState,
                     terminationSettings, propagatorType );
-
 
         // Define full propagation settings
         std::vector< std::shared_ptr< SingleArcPropagatorSettings< double > > > propagatorSettingsList =
@@ -411,11 +418,12 @@ int main( )
                 std::make_shared< MultiTypePropagatorSettings< double > >(
                     propagatorSettingsList, terminationSettings, dependentVariablesToSave );
         std::shared_ptr< IntegratorSettings< > > integratorSettings =
-                std::make_shared< IntegratorSettings< > >( rungeKutta4, initialPropagationTime, 3600.0 );
+                std::make_shared< IntegratorSettings< > >( rungeKutta4, initialPropagationTime, 7200.0 );
 
         // Construct problem and propagate trajectory using defined settings
         LowThrustProblem prob{
-            bodyMap, integratorSettings, propagatorSettings, specificImpulse, minimumMarsDistance, timeBuffer };
+            bodyMap, integratorSettings, propagatorSettings, specificImpulse, minimumMarsDistance, timeBuffer,
+                    true, positionPerturbation };
         prob.fitness( trajectoryParameters );
 
         // Save state and dependent variable results to file
@@ -423,7 +431,7 @@ int main( )
         std::map< double, Eigen::VectorXd> dependentVariableHistory = prob.getLastRunDependentVariableHistory( );
         input_output::writeDataMapToTextFile( stateHistory,  "stateHistory.dat", outputPath );
         input_output::writeDataMapToTextFile( dependentVariableHistory, "dependentVariables.dat", outputPath );
-
+        input_output::writeMatrixToFile( positionPerturbation, "positionPerturbation.dat", 16, outputPath );
 
         if( generateAndCompareToBenchmark && i !=0 )
         {
@@ -454,9 +462,9 @@ int main( )
         else
         {
             benchmarkStateInterpolator = interpolators::createOneDimensionalInterpolator(
-                       stateHistory, std::make_shared< LagrangeInterpolatorSettings >( 8 ) );
+                        stateHistory, std::make_shared< LagrangeInterpolatorSettings >( 8 ) );
             benchmarkDependentInterpolator = interpolators::createOneDimensionalInterpolator(
-                       dependentVariableHistory, std::make_shared< LagrangeInterpolatorSettings >( 8 ) );
+                        dependentVariableHistory, std::make_shared< LagrangeInterpolatorSettings >( 8 ) );
         }
     }
 }

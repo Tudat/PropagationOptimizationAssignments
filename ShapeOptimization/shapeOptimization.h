@@ -48,7 +48,8 @@ void setVehicleShapeParameters(
 //! Function to add the Capsule, and associated shape properties, to the body map.
 void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
                           std::vector< double >& shapeParameters,
-                          const double vehicleDensity );
+                          const double vehicleDensity,
+                          const Eigen::VectorXd& vehicleParameterPerturbation = Eigen::VectorXd::Zero( 0 ) );
 
 //! Class to set the aerodynamic angles of the capsule (default: all angles 0, angle-of-attack constant at given value)
 class CapsuleAerodynamicGuidance: public aerodynamics::AerodynamicGuidance
@@ -100,9 +101,10 @@ public:
             const simulation_setup::NamedBodyMap bodyMap,
             const std::shared_ptr< IntegratorSettings< > > integratorSettings,
             const std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings,
-            const double vehicleDensity ):
+            const double vehicleDensity,
+            const Eigen::VectorXd& vehicleParameterPerturbation = Eigen::VectorXd::Zero( 0 ) ):
         bodyMap_( bodyMap ), integratorSettings_( integratorSettings ),propagatorSettings_( propagatorSettings ),
-        vehicleDensity_( vehicleDensity ){ }
+        vehicleDensity_( vehicleDensity ), vehicleParameterPerturbation_( vehicleParameterPerturbation ){ }
 
     //! Default constructor
     ShapeOptimizationProblem( ){ }
@@ -156,6 +158,8 @@ private:
 
     //! Object holding the dynamics simulator, as created during last call of fitness function
     mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
+
+    Eigen::VectorXd vehicleParameterPerturbation_;
 
 };
 
