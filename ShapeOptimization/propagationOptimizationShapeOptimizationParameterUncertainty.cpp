@@ -333,12 +333,19 @@ int main()
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd > >  benchmarkStateInterpolator;
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd >  >  benchmarkDependentInterpolator;
 
+    //! ASSIGNMENT 2 NOTE: This code runs the code with 100 different values of reference area of the capsule. The first run uses
+    //! the nominal value, the other runs use randomly generated perturb the reference area with a factor 1+X, with X having
+    //! 0 mean and standard deviation of 0.01. The differences w.r.t. the nominal run (considered the benchmarkl case i=0)
+    //! are saved to a file
+    //! MAKE SURE TO USE YOUR OWN SETTINGS when using this file as an example for question 2.
+    //!
     std::function< double( ) > coefficientPerturbationFunction =
             statistics::createBoostContinuousRandomVariableGeneratorFunction(
                 statistics::normal_boost_distribution, boost::assign::list_of( 0 )( 1.0 ), 0.0 );
 
     for( int i = 0; i < 100; i++ )
     {
+        std::cout<<"Parameter uncertainty "<<i<<std::endl;
         std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimizationParameterUncertainty/" + std::to_string( i ) );
 
         // Define simulation body settings.
@@ -349,7 +356,7 @@ int main()
 
         std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
                 getDefaultBodySettings( bodiesToCreate );
-        for( int i = 0; i < bodiesToCreate.size( ); i++ )
+        for( unsigned int i = 0; i < bodiesToCreate.size( ); i++ )
         {
             bodySettings[ bodiesToCreate.at( i ) ]->rotationModelSettings->resetOriginalFrame( "J2000" );
             bodySettings[ bodiesToCreate.at( i ) ]->ephemerisSettings->resetFrameOrientation( "J2000" );
@@ -359,7 +366,12 @@ int main()
         simulation_setup::NamedBodyMap bodyMap = simulation_setup::createBodies( bodySettings );
 
         Eigen::VectorXd vehicleParameterPerturbations = Eigen::VectorXd::Zero( 1 );
-        vehicleParameterPerturbations( 0 ) = 0.01 * coefficientPerturbationFunction( );
+        if( i != 0 )
+        {
+            vehicleParameterPerturbations( 0 ) = 0.01 * coefficientPerturbationFunction( );
+        }
+        //! ASSIGNMENT 2 NOTE: The computation of ANY uncertainty in vehicle parameters must be passed here to the
+        //! parameter vehicleParameterPerturbations. These are then used in the addCapsuleToBodyMap function (see shapeOptimization.cpp).
         addCapsuleToBodyMap( bodyMap, shapeParameters, vehicleDensity, vehicleParameterPerturbations );
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -407,6 +419,8 @@ int main()
                 std::make_shared< IntegratorSettings< > >( rungeKutta4, simulationStartEpoch, 1.0 );
 
         // Construct problem and propagate trajectory using defined settings
+        //! ASSIGNMENT 2 NOTE: The computation of ANY uncertainty in vehicle parameters must be passed here to the
+        //! problem constructor (see ASSIGNMENT 2 NOTE above)
         ShapeOptimizationProblem prob{ bodyMap, integratorSettings, propagatorSettings, vehicleDensity, vehicleParameterPerturbations };
         prob.fitness( shapeParameters );
         // Save state and dependent variable results to file

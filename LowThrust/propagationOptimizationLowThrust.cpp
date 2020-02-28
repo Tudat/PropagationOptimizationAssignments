@@ -308,16 +308,22 @@ int main( )
     double minimumMarsDistance = 5.0E7;
     double timeBuffer = 30.0 * physical_constants::JULIAN_DAY;
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////     CREATE ENVIRONMENT                   //////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+    //! ASSIGNMENT 2 NOTE: This code runs 3 times, once with a 'nominal' model, once adding the Earth's, and once adding the
+    //! Martian point mass acceleration. You can extend this list with an arbitrary number of different variations in
+    //! acceleration and environment models for question 1.
+    //! MAKE SURE TO USE YOUR OWN SETTINGS when using this file as an example for question 1.
+    //!
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd > >  benchmarkStateInterpolator;
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd >  >  benchmarkDependentInterpolator;
 
     for( int i = 0; i < 3; i++ )
     {
-        std::string outputPath = tudat_applications::getOutputPath( "LowThrustAssignment2/" + std::to_string( i ) );
+        std::cout<<"Running env/acc model "<<i<<std::endl;
+        std::string outputPath = tudat_applications::getOutputPath( "LowThrustAccelerationEnvironment/" + std::to_string( i ) );
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////     CREATE ENVIRONMENT                   //////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         // Create solar system bodies
         std::vector< std::string > bodiesToCreate;

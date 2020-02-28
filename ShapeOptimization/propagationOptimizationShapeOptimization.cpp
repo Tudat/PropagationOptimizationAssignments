@@ -323,18 +323,25 @@ int main()
     // Vehicle properties
     double vehicleDensity = 250.0;
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////            CREATE ENVIRONMENT            //////////////////////////////////////////////////////
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     // Set simulation start epoch.
     double simulationStartEpoch = 0.0;
 
+    //! ASSIGNMENT 2 NOTE: This code runs 3 times, once with a 'nominal' model, once with a Earth's degree-two gravity field
+    //! acceleration, and once adding the Sun's point mass acceleration. You can extend this list with an arbitrary number
+    //! of different variations in acceleration and environment models for question 1.
+    //! MAKE SURE TO USE YOUR OWN SETTINGS when using this file as an example for question 1.
+    //!
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd > >  benchmarkStateInterpolator;
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd >  >  benchmarkDependentInterpolator;
     for( int i = 0; i < 3; i++ )
     {
-        std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimizationAssignment2/" + std::to_string( i ) );
+        std::cout<<"Running env/acc model "<<i<<std::endl;
+        std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimizationAssignmentAccelerationEnvironment/" + std::to_string( i ) );
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////            CREATE ENVIRONMENT            //////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
         // Define simulation body settings.
         std::vector< std::string > bodiesToCreate;
@@ -344,7 +351,7 @@ int main()
 
         std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
                 getDefaultBodySettings( bodiesToCreate );
-        for( int i = 0; i < bodiesToCreate.size( ); i++ )
+        for( unsigned int i = 0; i < bodiesToCreate.size( ); i++ )
         {
             bodySettings[ bodiesToCreate.at( i ) ]->rotationModelSettings->resetOriginalFrame( "J2000" );
             bodySettings[ bodiesToCreate.at( i ) ]->ephemerisSettings->resetFrameOrientation( "J2000" );

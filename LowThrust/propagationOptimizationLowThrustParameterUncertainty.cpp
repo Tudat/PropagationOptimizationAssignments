@@ -323,13 +323,19 @@ int main( )
     bodiesToCreate.push_back( "Earth" );
     bodiesToCreate.push_back( "Mars" );
 
-    std::function< double( ) > positionPerturbationFunction =
+    //! ASSIGNMENT 2 NOTE: This code runs the code with 100 different values of the Cr of the vehicle. The first run uses
+    //! the nominal value of 1.2, the other runs use randomly generated variations with mean 0 and std 0.2.
+    //! The differences w.r.t. the nominal run (considered the benchmarkl case i=0) are saved to a file
+    //! MAKE SURE TO USE YOUR OWN SETTINGS when using this file as an example for question 2.
+    //!
+    std::function< double( ) > crPerturbationFunction =
             statistics::createBoostContinuousRandomVariableGeneratorFunction(
-                statistics::normal_boost_distribution, boost::assign::list_of( 0 )( 100.0 ), 0.0 );
+                statistics::normal_boost_distribution, boost::assign::list_of( 0 )( 1.0 ), 0.0 );
 
     for( int i = 0; i < 100; i++ )
     {
-        std::string outputPath = tudat_applications::getOutputPath( "LowThrustAssignment2ParameterUncertainty/" + std::to_string( i ) );
+        std::cout<<"Parameter uncertainty "<<i<<std::endl;
+        std::string outputPath = tudat_applications::getOutputPath( "LowThrustAssignmentParameterUncertainty/" + std::to_string( i ) );
         std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
                 getDefaultBodySettings( bodiesToCreate );
 
@@ -340,9 +346,26 @@ int main( )
         ///////////////////////             CREATE VEHICLE            /////////////////////////////////////////////////////////
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+        // Create radiation pressure settings
+        double referenceAreaRadiation = 100.0;
+        double radiationPressureCoefficientVariation = 0.0;
+        if( i != 0 )
+        {
+            radiationPressureCoefficientVariation = 0.2 * crPerturbationFunction( );
+        }
+        double radiationPressureCoefficient = 1.2 + radiationPressureCoefficientVariation;
+        std::shared_ptr< RadiationPressureInterfaceSettings > vehicleRadiationPressureSettings =
+                std::make_shared< CannonBallRadiationPressureInterfaceSettings >(
+                    "Sun", referenceAreaRadiation, radiationPressureCoefficient );
+
+
+
         // Create spacecraft object.
         bodyMap[ "Vehicle" ] = std::make_shared< simulation_setup::Body >( );
         bodyMap[ "Vehicle" ]->setConstantBodyMass( vehicleMass );
+        bodyMap[ "Vehicle" ]->setRadiationPressureInterface(
+                    "Sun", createRadiationPressureInterface(
+                        vehicleRadiationPressureSettings, "Vehicle", bodyMap ) );
 
         // Finalize body creation.
         setGlobalFrameBodyEphemerides( bodyMap, "SSB", "ECLIPJ2000" );
@@ -357,6 +380,8 @@ int main( )
         // Define acceleration model settings.
         std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfVehicle;
         accelerationsOfVehicle[ "Sun" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
+        accelerationsOfVehicle[ "Sun" ].push_back( std::make_shared< AccelerationSettings >( cannon_ball_radiation_pressure ) );
+
         accelerationsOfVehicle[ "Vehicle" ].push_back(
                     getThrustAccelerationSettingsFromParameters( trajectoryParameters, bodyMap ) );
 
@@ -411,7 +436,7 @@ int main( )
         // Construct problem and propagate trajectory using defined settings
         LowThrustProblem prob{
             bodyMap, integratorSettings, propagatorSettings, specificImpulse, minimumMarsDistance, timeBuffer,
-                    true, positionPerturbation };
+                    true };
         prob.fitness( trajectoryParameters );
 
         // Save state and dependent variable results to file
@@ -419,7 +444,8 @@ int main( )
         std::map< double, Eigen::VectorXd> dependentVariableHistory = prob.getLastRunDependentVariableHistory( );
         input_output::writeDataMapToTextFile( stateHistory,  "stateHistory.dat", outputPath );
         input_output::writeDataMapToTextFile( dependentVariableHistory, "dependentVariables.dat", outputPath );
-        input_output::writeMatrixToFile( positionPerturbation, "positionPerturbation.dat", 16, outputPath );
+        input_output::writeMatrixToFile( ( Eigen::MatrixXd( 1, 1 ) << radiationPressureCoefficientVariation ).finished( ),
+                                         "positionPerturbation.dat", 16, outputPath );
 
         if( generateAndCompareToBenchmark && i !=0 )
         {

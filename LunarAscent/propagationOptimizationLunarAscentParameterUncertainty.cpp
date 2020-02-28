@@ -339,6 +339,9 @@ int main( )
     double maximumDuration = 86400.0;
     double terminationAltitude = 100.0E3;
 
+    // Set simulation start epoch.
+    double simulationStartEpoch = 0.0;
+
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd > >  benchmarkStateInterpolator;
     std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd >  >  benchmarkDependentInterpolator;
 
@@ -346,14 +349,17 @@ int main( )
     ///////////////////////     CREATE ENVIRONMENT                   //////////////////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Set simulation start epoch.
-    double simulationStartEpoch = 0.0;
-
+    //! ASSIGNMENT 2 NOTE: This code runs the code with 100 different values of the normalized C20 of the Moon. The first run uses
+    //! the nominal value, the other runs use randomly generated variations with mean 0 and std 1.0E-10.
+    //! The differences w.r.t. the nominal run (considered the benchmarkl case i=0) are saved to a file
+    //! MAKE SURE TO USE YOUR OWN SETTINGS when using this file as an example for question 2.
+    //!
     std::function< double( ) > c20PerturbationFunction =
             statistics::createBoostContinuousRandomVariableGeneratorFunction(
                 statistics::normal_boost_distribution, boost::assign::list_of( 0 )( 1.0 ), 0.0 );
     for( int i = 0; i < 100; i++ )
     {
+        std::cout<<"Parameter uncertainty "<<i<<std::endl;
         std::string outputPath = tudat_applications::getOutputPath( "LunarAscentParameterUncertainty/" + std::to_string( i ) );
 
         // Create solar system bodies
@@ -369,7 +375,11 @@ int main( )
                 std::dynamic_pointer_cast< SphericalHarmonicsGravityFieldSettings >( bodySettings.at( "Moon" )->gravityFieldSettings );
         Eigen::MatrixXd moonCosineSphericalHarmonicsCoefficients =
                 moonSphericalHarmonicGravityFieldSettings->getCosineCoefficients( );
-        double c20Perturbation = 1.0E-10 * c20PerturbationFunction( );
+        double c20Perturbation = 0.0;
+        if( i != 0 )
+        {
+            c20Perturbation = 1.0E-10 * c20PerturbationFunction( );
+        }
         moonCosineSphericalHarmonicsCoefficients( 2, 0 ) += c20Perturbation;
         moonSphericalHarmonicGravityFieldSettings->resetCosineCoefficients( moonCosineSphericalHarmonicsCoefficients );
 

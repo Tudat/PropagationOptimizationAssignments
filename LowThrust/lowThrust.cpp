@@ -228,10 +228,10 @@ LowThrustProblem::LowThrustProblem( const simulation_setup::NamedBodyMap bodyMap
                                     double minimumMarsDistance,
                                     double timeBuffer,
                                     const bool performPropagation,
-                                    const Eigen::Vector3d initialPositionPerturbation ):
+                                    const Eigen::Vector6d initialStatePerturbation ):
     bodyMap_(bodyMap), integratorSettings_(integratorSettings), propagatorSettings_(propagatorSettings),
     specificImpulse_( specificImpulse ), minimumMarsDistance_( minimumMarsDistance ), timeBuffer_( timeBuffer ),
-    performPropagation_( performPropagation ), initialPositionPerturbation_( initialPositionPerturbation )
+    performPropagation_( performPropagation ), initialStatePerturbation_( initialStatePerturbation )
 {
     if( performPropagation )
     {
@@ -268,7 +268,7 @@ std::vector< double > LowThrustProblem::fitness( std::vector< double >& trajecto
                     accelerationSettings, bodyMap_ );
         Eigen::Vector6d systemInitialState = getHodographicLowThrustStateAtEpoch(
                     trajectoryParameters, bodyMap_, initialPropagationTime );
-        systemInitialState.segment( 0, 3 ) += initialPositionPerturbation_;
+        systemInitialState.segment( 0, 6 ) += initialStatePerturbation_;
         translationalStatePropagatorSettings_->resetInitialStates( systemInitialState );
 
         // Update full propagator settings

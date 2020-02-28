@@ -413,26 +413,32 @@ int main( )
                 std::vector< std::string >{ "Vehicle" }, massRateModelSettings,
                 ( Eigen::Matrix< double, 1, 1 >( ) << vehicleMass ).finished( ), terminationSettings );
 
-    std::function< double( ) > positionPerturbationFunction =
+    //! ASSIGNMENT 2 NOTE: This code runs the code with 100 different values of the initial position. The first run uses
+    //! the nominal value of 1.2, the other runs use randomly generated variations with mean 0 and std 1 m for each inertial
+    //! component (uncorrelated distributions). The differences w.r.t. the nominal run (considered the benchmarkl case i=0)
+    //! are saved to a file.
+    //! MAKE SURE TO USE YOUR OWN SETTINGS when using this file as an example for question 3.
+    //!
+    //!
+    std::function< double( ) > statePerturbationFunction =
             statistics::createBoostContinuousRandomVariableGeneratorFunction(
                 statistics::normal_boost_distribution, boost::assign::list_of( 0 )( 1.0 ), 0.0 );
+
     for( int i = 0; i < 100; i++ )
     {
-        std::string outputPath = tudat_applications::getOutputPath( "LunarAscentAssignment2Uncertainty/" + std::to_string( i ) );
+        std::cout<<"Initial state uncertainty "<<i<<std::endl;
+        std::string outputPath = tudat_applications::getOutputPath( "LunarAscentAssignmentStateUncertainty/" + std::to_string( i ) );
 
-        Eigen::Vector3d positionPerturbation = Eigen::Vector3d::Zero( );
+        Eigen::Vector6d statePerturbation = Eigen::Vector6d::Zero( );
         if( i != 0 )
         {
-            positionPerturbation( 0 ) += positionPerturbationFunction( );
-            positionPerturbation( 1 ) += positionPerturbationFunction( );
-            positionPerturbation( 2 ) += positionPerturbationFunction( );
+            statePerturbation( 0 ) += statePerturbationFunction( );
+            statePerturbation( 1 ) += statePerturbationFunction( );
+            statePerturbation( 2 ) += statePerturbationFunction( );
         }
 
         Eigen::Vector6d perturbedInitialState = systemInitialState;
-        perturbedInitialState.segment( 0, 3 ) += positionPerturbation;
-
-        std::cout<<( perturbedInitialState - systemInitialState ).transpose( )<<std::endl;
-
+        perturbedInitialState += statePerturbation;
 
         // Define translational state propagation settings
         TranslationalPropagatorType propagatorType = cowell;
@@ -462,7 +468,7 @@ int main( )
         std::map< double, Eigen::VectorXd> dependentVariableHistory = prob.getLastRunDependentVariableHistory( );
         input_output::writeDataMapToTextFile( stateHistory,  "stateHistory.dat", outputPath );
         input_output::writeDataMapToTextFile( dependentVariableHistory, "dependentVariables.dat", outputPath );
-        input_output::writeMatrixToFile( positionPerturbation, "positionPerturbation.dat", 16, outputPath );
+        input_output::writeMatrixToFile( statePerturbation, "statePerturbation.dat", 16, outputPath );
 
         if( generateAndCompareToBenchmark && i !=0 )
         {
