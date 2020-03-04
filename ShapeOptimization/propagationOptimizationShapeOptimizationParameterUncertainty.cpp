@@ -356,10 +356,10 @@ int main()
 
         std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
                 getDefaultBodySettings( bodiesToCreate );
-        for( unsigned int i = 0; i < bodiesToCreate.size( ); i++ )
+        for( unsigned int j = 0; j < bodiesToCreate.size( ); j++ )
         {
-            bodySettings[ bodiesToCreate.at( i ) ]->rotationModelSettings->resetOriginalFrame( "J2000" );
-            bodySettings[ bodiesToCreate.at( i ) ]->ephemerisSettings->resetFrameOrientation( "J2000" );
+            bodySettings[ bodiesToCreate.at( j ) ]->rotationModelSettings->resetOriginalFrame( "J2000" );
+            bodySettings[ bodiesToCreate.at( j ) ]->ephemerisSettings->resetFrameOrientation( "J2000" );
         }
 
         // Create Earth object
