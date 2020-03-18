@@ -17,7 +17,7 @@ namespace PropagationOptimization2020
 
 //! Function that generates thrust acceleration model from thrust parameters
 std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationModelFromParameters(
-        std::vector< double >& thrustParameters,
+        const std::vector< double >& decisionVariables,
         const simulation_setup::NamedBodyMap bodyMap,
         const double initialTime,
         const double constantSpecificImpulse )
@@ -25,7 +25,7 @@ std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationModelFromPara
     // Define thrust functions
     std::shared_ptr< LunarAscentThrustGuidance > thrustGuidance =
             std::make_shared< LunarAscentThrustGuidance >(
-                bodyMap.at( "Vehicle" ), initialTime, thrustParameters );
+                bodyMap.at( "Vehicle" ), initialTime, decisionVariables );
     std::function< Eigen::Vector3d( const double ) > thrustDirectionFunction =
             std::bind( &LunarAscentThrustGuidance::getCurrentThrustDirection, thrustGuidance, std::placeholders::_1 );
     std::function< double( const double ) > thrustMagnitudeFunction =
@@ -51,6 +51,7 @@ using namespace tudat_applications::PropagationOptimization2020;
 LunarAscentProblem::LunarAscentProblem( const simulation_setup::NamedBodyMap bodyMap,
                                         const std::shared_ptr< IntegratorSettings< > > integratorSettings,
                                         const std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings,
+                                        const std::vector< std::pair< double, double > >& decisionVariableRange,
                                         const double constantSpecificImpulse ):
     bodyMap_(bodyMap), integratorSettings_(integratorSettings), propagatorSettings_(propagatorSettings),
     constantSpecificImpulse_( constantSpecificImpulse )
@@ -58,9 +59,19 @@ LunarAscentProblem::LunarAscentProblem( const simulation_setup::NamedBodyMap bod
     translationalStatePropagatorSettings_ =
             std::dynamic_pointer_cast< TranslationalStatePropagatorSettings< double > >(
                 propagatorSettings_->propagatorSettingsMap_.at( translational_state ).at( 0 ) );
+
+
+    std::vector< double > boxBoundMinima, boxBoundMaxima;
+    for( unsigned int i = 0; i < decisionVariableRange.size( ); i++ )
+    {
+        boxBoundMinima.push_back( decisionVariableRange.at( i ).first );
+        boxBoundMaxima.push_back( decisionVariableRange.at( i ).second );
+    }
+    boxBounds_ = std::make_pair( boxBoundMinima, boxBoundMaxima );
+
 }
 
-std::vector< double > LunarAscentProblem::fitness( std::vector< double >& thrustParameters ) const
+std::vector< double > LunarAscentProblem::fitness( const std::vector< double >& decisionVariables ) const
 {
     // Extract existing acceleration settings, and clear existing self-exerted accelerations of vehicle
     simulation_setup::SelectedAccelerationMap accelerationSettings =
@@ -70,7 +81,7 @@ std::vector< double > LunarAscentProblem::fitness( std::vector< double >& thrust
     // Retrieve new acceleration model for thrust and set in list of settings
     std::shared_ptr< AccelerationSettings > newThrustSettings =
             getThrustAccelerationModelFromParameters(
-                    thrustParameters, bodyMap_, integratorSettings_->initialTime_, constantSpecificImpulse_ );
+                decisionVariables, bodyMap_, integratorSettings_->initialTime_, constantSpecificImpulse_ );
     accelerationSettings[ "Vehicle" ][ "Vehicle" ].push_back( newThrustSettings );
 
     // Update translational propagatot settings
@@ -79,9 +90,22 @@ std::vector< double > LunarAscentProblem::fitness( std::vector< double >& thrust
 
     // Update full propagator settings
     propagatorSettings_->resetIntegratedStateModels( bodyMap_ );
-
     dynamicsSimulator_ = std::make_shared< SingleArcDynamicsSimulator< > >( bodyMap_, integratorSettings_, propagatorSettings_ );
 
-    return {0.0};
+    computeObjectivesAndConstraints( decisionVariables );
+
+    return objectives_;
 
 }
+
+void LunarAscentProblem::computeObjectivesAndConstraints( const std::vector< double >& decisionVariables ) const
+{
+    std::map< double, Eigen::VectorXd > stateHistory =
+            dynamicsSimulator_->getEquationsOfMotionNumericalSolution( );
+    std::map< double, Eigen::VectorXd > dependentVariableHistory =
+            dynamicsSimulator_->getDependentVariableHistory( );
+
+    constraints_; // =
+    objectives_ = { 0.0 }; // =
+}
+

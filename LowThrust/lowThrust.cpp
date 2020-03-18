@@ -15,19 +15,19 @@ namespace tudat_applications
 namespace PropagationOptimization2020
 {
 
-double getTrajectoryTimeOfFlight( const std::vector< double >& trajectoryParameters)
+double getTrajectoryTimeOfFlight( const std::vector< double >& decisionVariables)
 {
-    return trajectoryParameters.at( 1 ) * physical_constants::JULIAN_DAY;
+    return decisionVariables.at( 1 ) * physical_constants::JULIAN_DAY;
 }
 
-double getTrajectoryInitialTime( const std::vector< double >& trajectoryParameters, const double bufferTime  )
+double getTrajectoryInitialTime( const std::vector< double >& decisionVariables, const double bufferTime  )
 {
-    return trajectoryParameters.at( 0 ) * physical_constants::JULIAN_DAY + bufferTime;
+    return decisionVariables.at( 0 ) * physical_constants::JULIAN_DAY + bufferTime;
 }
 
-double getTrajectoryFinalTime( const std::vector< double >& trajectoryParameters, const double bufferTime )
+double getTrajectoryFinalTime( const std::vector< double >& decisionVariables, const double bufferTime )
 {
-    return ( trajectoryParameters.at( 0 ) + trajectoryParameters.at( 1 )  )* physical_constants::JULIAN_DAY - bufferTime;
+    return ( decisionVariables.at( 0 ) + decisionVariables.at( 1 )  )* physical_constants::JULIAN_DAY - bufferTime;
 }
 
 
@@ -43,14 +43,14 @@ double getTrajectoryFinalTime( const std::vector< double >& trajectoryParameters
  * \return Shared pointer to the PropagationTerminationSettings object.
  */
 std::shared_ptr< PropagationTerminationSettings > getPropagationTerminationSettings(
-        const std::vector< double >& trajectoryParameters,
+        const std::vector< double >& decisionVariables,
         const double targetDistance,
         const double trajectoryTimeBuffer )
 {
 
     std::vector< std::shared_ptr< PropagationTerminationSettings > > terminationSettingsList;
     terminationSettingsList.push_back( std::make_shared< PropagationTimeTerminationSettings >(
-                                           getTrajectoryFinalTime( trajectoryParameters, trajectoryTimeBuffer ) ) );
+                                           getTrajectoryFinalTime( decisionVariables, trajectoryTimeBuffer ) ) );
     terminationSettingsList.push_back( std::make_shared< PropagationDependentVariableTerminationSettings >(
                                            std::make_shared< SingleDependentVariableSaveSettings >(
                                                relative_distance_dependent_variable, "Vehicle", "Mars" ), targetDistance, true ) );
@@ -61,7 +61,7 @@ std::shared_ptr< PropagationTerminationSettings > getPropagationTerminationSetti
 void getRadialVelocityShapingFunctions(
         std::vector< std::shared_ptr< shape_based_methods::BaseFunctionHodographicShaping > >& radialVelocityFunctionComponents,
         Eigen::VectorXd& freeCoefficientsRadialVelocityFunction,
-        const std::vector< double >& trajectoryParameters, const double frequency, const double scaleFactor,
+        const std::vector< double >& decisionVariables, const double frequency, const double scaleFactor,
         const double timeOfFlight, const int numberOfRevolutions  )
 {
     // Retrieve default methods (lowest-order in Gondelach and Noomen, 2015)
@@ -82,14 +82,14 @@ void getRadialVelocityShapingFunctions(
 
     // Set free parameters
     freeCoefficientsRadialVelocityFunction = Eigen::VectorXd::Zero( 2 );
-    freeCoefficientsRadialVelocityFunction( 0 ) = trajectoryParameters.at( 3 );
-    freeCoefficientsRadialVelocityFunction( 1 ) = trajectoryParameters.at( 4 );
+    freeCoefficientsRadialVelocityFunction( 0 ) = decisionVariables.at( 3 );
+    freeCoefficientsRadialVelocityFunction( 1 ) = decisionVariables.at( 4 );
 }
 
 void getNormalVelocityShapingFunctions(
         std::vector< std::shared_ptr< shape_based_methods::BaseFunctionHodographicShaping > >& normalVelocityFunctionComponents,
         Eigen::VectorXd& freeCoefficientsNormalVelocityFunction,
-        const std::vector< double >& trajectoryParameters, const double frequency, const double scaleFactor,
+        const std::vector< double >& decisionVariables, const double frequency, const double scaleFactor,
         const double timeOfFlight, const int numberOfRevolutions  )
 {
     // Retrieve default methods (lowest-order in Gondelach and Noomen, 2015)
@@ -109,14 +109,14 @@ void getNormalVelocityShapingFunctions(
 
     // Set free parameters
     freeCoefficientsNormalVelocityFunction = Eigen::VectorXd::Zero( 2 );
-    freeCoefficientsNormalVelocityFunction( 0 ) = trajectoryParameters.at( 5 );
-    freeCoefficientsNormalVelocityFunction( 1 ) = trajectoryParameters.at( 6 );
+    freeCoefficientsNormalVelocityFunction( 0 ) = decisionVariables.at( 5 );
+    freeCoefficientsNormalVelocityFunction( 1 ) = decisionVariables.at( 6 );
 }
 
 void getAxialVelocityShapingFunctions(
         std::vector< std::shared_ptr< shape_based_methods::BaseFunctionHodographicShaping > >& axialVelocityFunctionComponents,
         Eigen::VectorXd& freeCoefficientsAxialVelocityFunction,
-        const std::vector< double >& trajectoryParameters, const double frequency, const double scaleFactor,
+        const std::vector< double >& decisionVariables, const double frequency, const double scaleFactor,
         const double timeOfFlight, const int numberOfRevolutions )
 {
     // Retrieve default methods (lowest-order in Gondelach and Noomen, 2015)
@@ -138,22 +138,22 @@ void getAxialVelocityShapingFunctions(
 
     // Set free parameters
     freeCoefficientsAxialVelocityFunction = Eigen::VectorXd::Zero( 2 );
-    freeCoefficientsAxialVelocityFunction( 0 ) = trajectoryParameters.at( 7 );
-    freeCoefficientsAxialVelocityFunction( 1 ) =  trajectoryParameters.at( 8 );
+    freeCoefficientsAxialVelocityFunction( 0 ) = decisionVariables.at( 7 );
+    freeCoefficientsAxialVelocityFunction( 1 ) =  decisionVariables.at( 8 );
 }
 
 
 
 //! Function that creates the object that computes the semi-analytical hodographic shaping method
 std::shared_ptr< HodographicShaping > createHodographicShapingObject(
-        std::vector< double >& trajectoryParameters,
+        const std::vector< double >& decisionVariables,
         const simulation_setup::NamedBodyMap bodyMap )
 {
     // Retrieve basic properties from trajectory parameters
-    double initialTime = getTrajectoryInitialTime( trajectoryParameters );
-    double timeOfFlight = getTrajectoryTimeOfFlight( trajectoryParameters );
-    double finalTime = getTrajectoryFinalTime( trajectoryParameters );
-    int numberOfRevolutions = trajectoryParameters.at( 2 );
+    double initialTime = getTrajectoryInitialTime( decisionVariables );
+    double timeOfFlight = getTrajectoryTimeOfFlight( decisionVariables );
+    double finalTime = getTrajectoryFinalTime( decisionVariables );
+    int numberOfRevolutions = decisionVariables.at( 2 );
 
     // Compute relevant frequency and scale factor for shaping functions
     double frequency = 2.0 * mathematical_constants::PI / timeOfFlight;
@@ -169,13 +169,13 @@ std::shared_ptr< HodographicShaping > createHodographicShapingObject(
     std::vector< std::shared_ptr< shape_based_methods::BaseFunctionHodographicShaping > > axialVelocityFunctionComponents;
 
     getRadialVelocityShapingFunctions(
-                radialVelocityFunctionComponents, freeCoefficientsRadialVelocityFunction, trajectoryParameters,
+                radialVelocityFunctionComponents, freeCoefficientsRadialVelocityFunction, decisionVariables,
                 frequency, scaleFactor, timeOfFlight, numberOfRevolutions );
     getNormalVelocityShapingFunctions(
-                normalVelocityFunctionComponents, freeCoefficientsNormalVelocityFunction, trajectoryParameters,
+                normalVelocityFunctionComponents, freeCoefficientsNormalVelocityFunction, decisionVariables,
                 frequency, scaleFactor, timeOfFlight, numberOfRevolutions );
     getAxialVelocityShapingFunctions(
-                axialVelocityFunctionComponents, freeCoefficientsAxialVelocityFunction, trajectoryParameters,
+                axialVelocityFunctionComponents, freeCoefficientsAxialVelocityFunction, decisionVariables,
                 frequency, scaleFactor, timeOfFlight, numberOfRevolutions );
 
     // Retrieve boundary conditions and central body gravitational parameter
@@ -194,22 +194,22 @@ std::shared_ptr< HodographicShaping > createHodographicShapingObject(
 
 //! Function that generates thrust acceleration model from thrust parameters
 std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationSettingsFromParameters(
-        std::vector< double >& trajectoryParameters,
+        const std::vector< double >& decisionVariables,
         const simulation_setup::NamedBodyMap bodyMap )
 {
-    return createHodographicShapingObject( trajectoryParameters, bodyMap )->getLowThrustAccelerationSettings(
-                bodyMap, "Vehicle", nullptr, nullptr, getTrajectoryInitialTime( trajectoryParameters ) );
+    return createHodographicShapingObject( decisionVariables, bodyMap )->getLowThrustAccelerationSettings(
+                bodyMap, "Vehicle", nullptr, nullptr, getTrajectoryInitialTime( decisionVariables ) );
 }
 
 //! Function to retrieve the semi-analytical calculation of the state along the shape-based trajectory at a given time
 Eigen::Vector6d getHodographicLowThrustStateAtEpoch(
-        std::vector< double >& trajectoryParameters,
+        const std::vector< double >& decisionVariables,
         const simulation_setup::NamedBodyMap bodyMap,
         const double evaluationTime )
 {
     std::map< double, Eigen::Vector6d > stateMap;
-    std::vector< double > epochs = { evaluationTime - getTrajectoryInitialTime( trajectoryParameters, 0.0 ) };
-    createHodographicShapingObject( trajectoryParameters, bodyMap )->getTrajectory( epochs, stateMap );
+    std::vector< double > epochs = { evaluationTime - getTrajectoryInitialTime( decisionVariables, 0.0 ) };
+    createHodographicShapingObject( decisionVariables, bodyMap )->getTrajectory( epochs, stateMap );
     return stateMap.begin( )->second;
 
 }
@@ -224,33 +224,42 @@ using namespace tudat_applications::PropagationOptimization2020;
 LowThrustProblem::LowThrustProblem( const simulation_setup::NamedBodyMap bodyMap,
                                     const std::shared_ptr< IntegratorSettings< > > integratorSettings,
                                     const std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings,
+                                    const std::vector< std::pair< double, double > >& decisionVariableRange,
                                     double specificImpulse,
                                     double minimumMarsDistance,
-                                    double timeBuffer,
-                                    const bool performPropagation,
-                                    const Eigen::Vector6d initialStatePerturbation ):
+                                    double timeBuffer ):
     bodyMap_(bodyMap), integratorSettings_(integratorSettings), propagatorSettings_(propagatorSettings),
-    specificImpulse_( specificImpulse ), minimumMarsDistance_( minimumMarsDistance ), timeBuffer_( timeBuffer ),
-    performPropagation_( performPropagation ), initialStatePerturbation_( initialStatePerturbation )
+    specificImpulse_( specificImpulse ), minimumMarsDistance_( minimumMarsDistance ), timeBuffer_( timeBuffer )
 {
-    if( performPropagation )
+    translationalStatePropagatorSettings_ =
+            std::dynamic_pointer_cast< TranslationalStatePropagatorSettings< double > >(
+                propagatorSettings_->propagatorSettingsMap_.at( translational_state ).at( 0 ) );
+
+    std::vector< double > boxBoundMinima, boxBoundMaxima;
+    for( unsigned int i = 0; i < decisionVariableRange.size( ); i++ )
     {
-        translationalStatePropagatorSettings_ =
-                std::dynamic_pointer_cast< TranslationalStatePropagatorSettings< double > >(
-                    propagatorSettings_->propagatorSettingsMap_.at( translational_state ).at( 0 ) );
+        boxBoundMinima.push_back( decisionVariableRange.at( i ).first );
+        boxBoundMaxima.push_back( decisionVariableRange.at( i ).second );
     }
+    boxBounds_ = std::make_pair( boxBoundMinima, boxBoundMaxima );
 }
 
-//! Function to compute propagate the dynamics of the vehicle defined by the trajectoryParameters
-std::vector< double > LowThrustProblem::fitness( std::vector< double >& trajectoryParameters ) const
+//! Function to compute propagate the dynamics of the vehicle defined by the decisionVariables
+std::vector< double > LowThrustProblem::fitness( const std::vector< double >& decisionVariables ) const
 {
     // Create trajectory shape object
     hodographicShaping_ = createHodographicShapingObject(
-                trajectoryParameters, bodyMap_ );
+                decisionVariables, bodyMap_ );
 
-    if( performPropagation_ )
+    double currentDeltaV = hodographicShaping_->computeDeltaV( );
+    double deltaVLimitValue = 50.0E3;
+
+    bool performPropagation = ( currentDeltaV < deltaVLimitValue );
+
+    std::cout<<"Calc: "<<currentDeltaV<<std::endl;
+    if( performPropagation )
     {
-        double initialPropagationTime = getTrajectoryInitialTime( trajectoryParameters, timeBuffer_ );
+        double initialPropagationTime = getTrajectoryInitialTime( decisionVariables, timeBuffer_ );
         integratorSettings_->initialTime_ = initialPropagationTime;
 
         // Extract existing acceleration settings, and clear existing self-exerted accelerations of vehicle
@@ -260,15 +269,15 @@ std::vector< double > LowThrustProblem::fitness( std::vector< double >& trajecto
 
         // Retrieve new acceleration model for thrust and set in list of settings
         std::shared_ptr< AccelerationSettings > newThrustSettings = hodographicShaping_->getLowThrustAccelerationSettings(
-                    bodyMap_, "Vehicle", [=](const double){return specificImpulse_;}, integratorSettings_, getTrajectoryInitialTime( trajectoryParameters ) );
+                    bodyMap_, "Vehicle", [=](const double){return specificImpulse_;}, integratorSettings_,
+        getTrajectoryInitialTime( decisionVariables ) );
         accelerationSettings[ "Vehicle" ][ "Vehicle" ].push_back( newThrustSettings );
 
         // Update translational propagatot settings
         translationalStatePropagatorSettings_->resetAccelerationModelsMap(
                     accelerationSettings, bodyMap_ );
         Eigen::Vector6d systemInitialState = getHodographicLowThrustStateAtEpoch(
-                    trajectoryParameters, bodyMap_, initialPropagationTime );
-        systemInitialState.segment( 0, 6 ) += initialStatePerturbation_;
+                    decisionVariables, bodyMap_, initialPropagationTime );
         translationalStatePropagatorSettings_->resetInitialStates( systemInitialState );
 
         // Update full propagator settings
@@ -277,12 +286,31 @@ std::vector< double > LowThrustProblem::fitness( std::vector< double >& trajecto
                     createCombinedInitialState< double >( propagatorSettings_->propagatorSettingsMap_ ).segment( 0, 7 ) );
         propagatorSettings_->resetTerminationSettings(
                     getPropagationTerminationSettings(
-                        trajectoryParameters, minimumMarsDistance_, 0.0 ) );
+                        decisionVariables, minimumMarsDistance_, 0.0 ) );
 
         dynamicsSimulator_ = std::make_shared< SingleArcDynamicsSimulator< > >( bodyMap_, integratorSettings_, propagatorSettings_ );
 
     }
 
-    return {0.0};
+    computeObjectivesAndConstraints( decisionVariables, performPropagation );
+    return objectives_;
 
+}
+
+void LowThrustProblem::computeObjectivesAndConstraints( const std::vector< double >& decisionVariables,
+                                                        const bool performPropagation ) const
+{
+    std::map< double, Eigen::VectorXd > stateHistory;
+    std::map< double, Eigen::VectorXd > dependentVariableHistory;
+
+    if( performPropagation )
+    {
+        stateHistory = dynamicsSimulator_->getEquationsOfMotionNumericalSolution( );
+        dependentVariableHistory = dynamicsSimulator_->getDependentVariableHistory( );
+    }
+
+    double currentDeltaV = hodographicShaping_->computeDeltaV( );
+
+    constraints_; // =
+    objectives_ = { currentDeltaV }; // =
 }

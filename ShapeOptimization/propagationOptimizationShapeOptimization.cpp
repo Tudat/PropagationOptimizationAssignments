@@ -8,6 +8,10 @@
  *    http://tudat.tudelft.nl/LICENSE.
  */
 
+#include "pagmo/island.hpp"
+#include "pagmo/problem.hpp"
+#include "pagmo/algorithms/de.hpp"
+
 #include "shapeOptimization.h"
 
 using namespace tudat_applications::PropagationOptimization2020;
@@ -152,134 +156,97 @@ std::shared_ptr< DependentVariableSaveSettings > getDependentVariableSaveSetting
     return std::make_shared< DependentVariableSaveSettings >( dependentVariablesList, false );
 }
 
-//! Function to generate to accurate benchmarks.
-/*!
- *  This function runs two propagations with two different integrator settings that serve as benchmarks for
- *  the nominal runs. To be able to compare these, the function returns the two interpolators pertaining
- *  to the state and dependent variables of one of the benchmarks. The states are written to files, as well
- *  as the difference in state and dependent variables between the two benchmarks.
- *
- *  The following files are written to files by this function (to the directory ShapeOptimziation/benchmarks/...:
- *
- *  - benchmarkStates_1.dat, benchmarkStates_2.dat The numerically propagated states from the two propagations
- *  - benchmarkDependent_1.dat, benchmarkDependent_2.dat The dependent variables from the two propagations
- *  - benchmarkStateDifference.dat Difference between the Cartesian states of the two benchmark runs
- *  - benchmarkDependentDifference.dat  Difference between the dependent variables of the two benchmark runs
- *
- *
- *
- *  CODING NOTE: THIS FUNCTION CAN BE EXTENDED TO GENERATE A MORE ROBUST BENCHMARK (USING MORE THAN 2 RUNS)
- *
- * \param simulationStartEpoch The start time of the simulation in seconds.
- * \param bodyMap NamedBodyMap containing the bodies in the simulation.
- * \param benchmarkPropagatorSettings Shared pointer to a translational propagator settings object,
- * which is used to run the benchmark propagations.
- * \param shapeParameters The vector of doubles that represents the shape parameters for the capsule.
- * \param outputPath String containing the path to the output directory.
- * \return Interpolators providing values for state and dependent variables of the benchmark run
- */
-std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > generateBenchmarks(
-        double simulationStartEpoch, const double vehicleDensity, simulation_setup::NamedBodyMap bodyMap,
-        std::shared_ptr< TranslationalStatePropagatorSettings< double > > benchmarkPropagatorSettings,
-        std::vector< double > shapeParameters, std::string outputPath )
+
+void createSimulationSettings(
+        NamedBodyMap& bodyMap,
+        std::shared_ptr< TranslationalStatePropagatorSettings< double > >& propagatorSettings,
+        std::shared_ptr< IntegratorSettings< > >& integratorSettings,
+        const double vehicleDensity )
 {
-    // Create integrator settings for 1st run
-    double firstBenchmarkStepSize = 2.0;
-    std::shared_ptr< IntegratorSettings< > > benchmarkIntegratorSettings;
-    benchmarkIntegratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
-                simulationStartEpoch, firstBenchmarkStepSize, RungeKuttaCoefficients::rungeKutta87DormandPrince,
-                firstBenchmarkStepSize, firstBenchmarkStepSize,
-                std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
+    // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
+    std::vector< double > shapeParameters =
+    { 8.148730872315355, 2.720324489288032, 0.2270385167794302, -0.4037530896422072, 0.2781438040896319, 0.4559143679738996 };
 
-    ShapeOptimizationProblem probBenchmarkFirst{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings, vehicleDensity };
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////            SIMULATION SETTINGS            /////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    std::cout << "Running first benchmark..." << std::endl;
-    probBenchmarkFirst.fitness( shapeParameters );
+    // Define simulation termination settings
+    double maximumDuration = 86400.0;
+    double terminationAltitude = 25.0E3;
 
-    // Create integrator settings for 2nd run
-    double secondBenchmarkStepSize = 4.0;
-    benchmarkIntegratorSettings = std::make_shared< RungeKuttaVariableStepSizeSettings< > >(
-                simulationStartEpoch, secondBenchmarkStepSize, RungeKuttaCoefficients::rungeKutta87DormandPrince,
-                secondBenchmarkStepSize, secondBenchmarkStepSize,
-                std::numeric_limits< double >::infinity( ), std::numeric_limits< double >::infinity( ) );
-    ShapeOptimizationProblem probBenchmarkSecond{ bodyMap, benchmarkIntegratorSettings, benchmarkPropagatorSettings, vehicleDensity };
+    // Vehicle properties
+    // Set simulation start epoch.
+    double simulationStartEpoch = 0.0;
 
-    std::cout << "Running second benchmark..." << std::endl;
-    probBenchmarkSecond.fitness( shapeParameters );
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////            CREATE ENVIRONMENT            //////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Retrieve states and dependent variables for both runs
-    std::map< double, Eigen::VectorXd > firstBenchmarkStates = probBenchmarkFirst.getLastRunPropagatedStateHistory( );
-    std::map< double, Eigen::VectorXd > secondBenchmarkStates = probBenchmarkSecond.getLastRunPropagatedStateHistory( );
 
-    std::map< double, Eigen::VectorXd > firstBenchmarkDependent = probBenchmarkFirst.getLastRunDependentVariableHistory( );
-    std::map< double, Eigen::VectorXd > secondBenchmarkDependent = probBenchmarkSecond.getLastRunDependentVariableHistory( );
-    \
-    // Put the benchmark data in a separate directory
-    outputPath.append("/benchmarks/");
+    // Define simulation body settings.
+    std::vector< std::string > bodiesToCreate;
+    bodiesToCreate.push_back( "Earth" );
+    bodiesToCreate.push_back( "Sun" );
+    bodiesToCreate.push_back( "Moon" );
 
-    // Write the state and dependent variable maps of both benchmarks to files
-    input_output::writeDataMapToTextFile( firstBenchmarkStates, "benchmarkStates_1.dat", outputPath );
-    input_output::writeDataMapToTextFile( secondBenchmarkStates, "benchmarkStates_2.dat", outputPath );
-    input_output::writeDataMapToTextFile( firstBenchmarkDependent, "benchmarkDependent_1.dat", outputPath );
-    input_output::writeDataMapToTextFile( secondBenchmarkDependent, "benchmarkDependent_2.dat", outputPath );
-
-    // Create 8th-order Lagrange interpolators for states and dependent variables of both runs
-    std::shared_ptr< InterpolatorSettings > interpolatorSettings = std::make_shared< LagrangeInterpolatorSettings >( 8 );
-    std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > > interpolators;
-
-    std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > firstStatesInterpolator =
-            createOneDimensionalInterpolator( firstBenchmarkStates, interpolatorSettings );
-    std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > secondStatesInterpolator =
-            createOneDimensionalInterpolator( secondBenchmarkStates, interpolatorSettings );
-    std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > firstDependentInterpolator =
-            createOneDimensionalInterpolator( firstBenchmarkDependent, interpolatorSettings );
-    std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorXd > > secondDependentInterpolator =
-            createOneDimensionalInterpolator( secondBenchmarkDependent, interpolatorSettings );
-
-    std::cout << "Calculating the difference between the benchmarks..." << std::endl;
-    std::map< double, Eigen::VectorXd > statesDifference;
-    std::map< double, Eigen::VectorXd > dependentVariablesDifference;
-
-    // Calculate difference between two benchmarks, both for the states and the dependent variables
-    for( auto iterator = secondBenchmarkStates.begin(); iterator != secondBenchmarkStates.end(); iterator++ )
+    std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
+            getDefaultBodySettings( bodiesToCreate );
+    for( unsigned int j = 0; j < bodiesToCreate.size( ); j++ )
     {
-        statesDifference[ iterator->first ] = firstStatesInterpolator->interpolate( iterator->first ) - iterator->second;
+        bodySettings[ bodiesToCreate.at( j ) ]->rotationModelSettings->resetOriginalFrame( "J2000" );
+        bodySettings[ bodiesToCreate.at( j ) ]->ephemerisSettings->resetFrameOrientation( "J2000" );
     }
 
-    for( auto iterator = secondBenchmarkDependent.begin(); iterator != secondBenchmarkDependent.end(); iterator++ )
-    {
-        dependentVariablesDifference[ iterator->first ] = firstDependentInterpolator->interpolate( iterator->first ) - iterator->second;
-    }
+    // Create Earth object
+    bodyMap = simulation_setup::createBodies( bodySettings );
+    addCapsuleToBodyMap( bodyMap, shapeParameters, vehicleDensity );
 
-    // Write the difference in state and dependent variables between the two benchmarks to files
-    input_output::writeDataMapToTextFile( statesDifference,
-                                          "benchmarkStateDifference.dat", outputPath );
-    input_output::writeDataMapToTextFile( dependentVariablesDifference,
-                                          "benchmarkDependentDifference.dat", outputPath );
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Return the interpolators for the first benchmark (can be changed to the second if needed)
-    interpolators.push_back( firstStatesInterpolator );
-    interpolators.push_back( firstDependentInterpolator );
+    // Define propagator settings variables.
+    SelectedAccelerationMap accelerationSettingsMap;
 
-    return interpolators;
+    // Define acceleration model settings.
+    std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfCapsule;
+    accelerationsOfCapsule[ "Earth" ].push_back( std::make_shared< AccelerationSettings >( aerodynamic ) );
+    accelerationsOfCapsule[ "Earth" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
+    accelerationSettingsMap[ "Capsule" ] = accelerationsOfCapsule;
+
+    std::vector< std::string > centralBodies;
+    std::vector< std::string > bodiesToPropagate;
+    bodiesToPropagate.push_back( "Capsule" );
+    centralBodies.push_back( "Earth" );
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////   RETRIEVE DATA FOR PROPAGATION SETTINGS            ///////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    std::shared_ptr< PropagationTerminationSettings > terminationSettings = getPropagationTerminationSettings(
+                simulationStartEpoch, maximumDuration, terminationAltitude );
+    std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave = getDependentVariableSaveSettings();
+    Eigen::Vector6d systemInitialState = getInitialState( simulationStartEpoch, bodyMap );
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////  IF DESIRED, GENERATE BENCHMARK                            ////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Create propagator settings
+    TranslationalPropagatorType propagatorType = cowell;
+    propagatorSettings =
+            std::make_shared< TranslationalStatePropagatorSettings< double > >(
+                centralBodies, accelerationSettingsMap, bodiesToPropagate, systemInitialState,
+                terminationSettings, propagatorType, dependentVariablesToSave );
+
+
+    // Create integrator settings
+    integratorSettings =
+            std::make_shared< IntegratorSettings< > >( rungeKutta4, simulationStartEpoch, 1.0 );
 }
 
 /*!
- *   This function computes the dynamics of a capsule re-entering the atmosphere of the Earth, using a variety of integrator
- *   and propagator settings (see comments under "RUN SIMULATION FOR VARIOUS SETTINGS"). For each run, the differences w.r.t. a
- *   benchmark propagation are computed, providing a proxy for setting quality.
- *
- *   The vehicle starts 120 km above the surface of the planet, with a speed of 7.83 km/s in an Earth-fixed frame (see
- *   getInitialState function).
- *
- *   The propagation is terminated as soon as one of the following conditions is met (see
- *   getPropagationTerminationSettings function):
- *
- *   - Altitude < 25 km
- *   - Propagation time > 24 hr
- *
- *   This propagation assumes only point mass gravity by the Earth and aerodynamic accelerations (see block 'CREATE ACCELERATIONS')
- *
  *   The trajectory of the capsule is heavily dependent on the shape and orientation of the vehicle. Here, the shape is
  *   determined here by the five parameters, which are used to compute the aerodynamic accelerations on the
  *   vehicle using a modified Newtonian flow (see also Dirkx and Mooij, 2018). The bank angle and sideslip angles are set to zero.
@@ -294,174 +261,104 @@ std::vector< std::shared_ptr< OneDimensionalInterpolator< double, Eigen::VectorX
  *   - Entry 4:  Side radius
  *   - Entry 5:  Constant Angle of Attack
  *
- *   Details on the outputs written by this file can be found:
- *
- *      Benchmark data: comments for 'generateBenchmarks' function
- *      Results for integrator/propagator variations: comments under "RUN SIMULATION FOR VARIOUS SETTINGS"
- *
  */
 int main()
 {
     // Load Spice kernels.
     spice_interface::loadStandardSpiceKernels( );
-
-    // DEFINE PROBLEM INDEPENDENT VARIABLES HERE:
-    std::vector< double > shapeParameters =
-    { 8.148730872315355, 2.720324489288032, 0.2270385167794302, -0.4037530896422072, 0.2781438040896319, 0.4559143679738996 };
-
-    std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimization" );
-    bool generateAndCompareToBenchmark = true;
+    std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimizationDesignSpace/" );
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ///////////////////////            SIMULATION SETTINGS            /////////////////////////////////////////////////////
+    ///////////////////////   CREATE SIMULATION ENVIRONMENT                     ///////////////////////////////////////////
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Define simulation termination settings
-    double maximumDuration = 86400.0;
-    double terminationAltitude = 25.0E3;
-
-    // Vehicle properties
     double vehicleDensity = 250.0;
 
-    // Set simulation start epoch.
-    double simulationStartEpoch = 0.0;
+    NamedBodyMap bodyMap;
+    std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings;
+    std::shared_ptr< IntegratorSettings< > > integratorSettings;
+    createSimulationSettings(
+                bodyMap, propagatorSettings, integratorSettings, vehicleDensity );
 
-    //! ASSIGNMENT 2 NOTE: This code runs 3 times, once with a 'nominal' model, once with a Earth's degree-two gravity field
-    //! acceleration, and once adding the Sun's point mass acceleration. You can extend this list with an arbitrary number
-    //! of different variations in acceleration and environment models for question 1.
-    //! MAKE SURE TO USE YOUR OWN SETTINGS when using this file as an example for question 1.
-    //!
-    std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd > >  benchmarkStateInterpolator;
-    std::shared_ptr< interpolators::OneDimensionalInterpolator< double, Eigen::VectorXd >  >  benchmarkDependentInterpolator;
-    for( int i = 0; i < 3; i++ )
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////   PERFORM MONTE-CARLO DESIGN SPACE EXPLORATION               //////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Define decision variable range
+    std::vector< std::pair< double, double > > decisionVariableRange =
+    { { 3.5, 10.0 }, { 2.0, 3.0 }, { 0.1, 5.0 }, { -55.0 * PI / 180.0, -10.0 * PI / 180.0 }, { 0.01, 0.5 },
+      { 0.0, 30.0 * PI / 180.0 } };
+
+    // Create random number generators for decision variables
+    std::vector< std::function< double( ) > > parameterMonteCarloFunctions;
+    for( unsigned int i = 0; i < decisionVariableRange.size( ); i++ )
     {
-        std::cout<<"Running env/acc model "<<i<<std::endl;
-        std::string outputPath = tudat_applications::getOutputPath( "ShapeOptimizationAssignmentAccelerationEnvironment/" + std::to_string( i ) );
+        parameterMonteCarloFunctions.push_back(
+                    statistics::createBoostContinuousRandomVariableGeneratorFunction(
+                        statistics::uniform_boost_distribution,
+        { decisionVariableRange.at( i ).first, decisionVariableRange.at( i ).second }, i ) );
+    }
 
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////            CREATE ENVIRONMENT            //////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Create problem class
+    ShapeOptimizationProblem shapeOptimizationProblem{
+        bodyMap, integratorSettings, propagatorSettings, decisionVariableRange, vehicleDensity };
 
-
-        // Define simulation body settings.
-        std::vector< std::string > bodiesToCreate;
-        bodiesToCreate.push_back( "Earth" );
-        bodiesToCreate.push_back( "Sun" );
-        bodiesToCreate.push_back( "Moon" );
-
-        std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
-                getDefaultBodySettings( bodiesToCreate );
-        for( unsigned int j = 0; j < bodiesToCreate.size( ); j++ )
+    // Run Monte Carlo design space exploration
+    for( int i = 0; i < 10000; i++ )
+    {
+        std::cout<<i<<std::endl;
+        std::vector< double > decisionVariables;
+        for( unsigned int j = 0; j < parameterMonteCarloFunctions.size( ); j++ )
         {
-            bodySettings[ bodiesToCreate.at( j ) ]->rotationModelSettings->resetOriginalFrame( "J2000" );
-            bodySettings[ bodiesToCreate.at( j ) ]->ephemerisSettings->resetFrameOrientation( "J2000" );
+            decisionVariables.push_back( parameterMonteCarloFunctions.at( j )( ) );
         }
-
-        // Create Earth object
-        simulation_setup::NamedBodyMap bodyMap = simulation_setup::createBodies( bodySettings );
-
-        addCapsuleToBodyMap( bodyMap, shapeParameters, vehicleDensity );
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////             CREATE ACCELERATIONS            ///////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        // Define propagator settings variables.
-        SelectedAccelerationMap accelerationSettingsMap;
-
-        // Define acceleration model settings.
-        std::map< std::string, std::vector< std::shared_ptr< AccelerationSettings > > > accelerationsOfCapsule;
-        accelerationsOfCapsule[ "Earth" ].push_back( std::make_shared< AccelerationSettings >( aerodynamic ) );
-
-        if( i == 1 )
-        {
-            accelerationsOfCapsule[ "Earth" ].push_back( std::make_shared< SphericalHarmonicAccelerationSettings >( 2, 2 ) );
-        }
-        else
-        {
-            accelerationsOfCapsule[ "Earth" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
-        }
-
-        if( i == 2 )
-        {
-            accelerationsOfCapsule[ "Sun" ].push_back( std::make_shared< AccelerationSettings >( central_gravity ) );
-        }
-
-        accelerationSettingsMap[ "Capsule" ] = accelerationsOfCapsule;
-
-        std::vector< std::string > centralBodies;
-        std::vector< std::string > bodiesToPropagate;
-        bodiesToPropagate.push_back( "Capsule" );
-        centralBodies.push_back( "Earth" );
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////   RETRIEVE DATA FOR PROPAGATION SETTINGS            ///////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        std::shared_ptr< PropagationTerminationSettings > terminationSettings = getPropagationTerminationSettings(
-                    simulationStartEpoch, maximumDuration, terminationAltitude );
-        std::shared_ptr< DependentVariableSaveSettings > dependentVariablesToSave = getDependentVariableSaveSettings();
-        Eigen::Vector6d systemInitialState = getInitialState( simulationStartEpoch, bodyMap );
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////  IF DESIRED, GENERATE BENCHMARK                            ////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        // Create propagator settings
-        TranslationalPropagatorType propagatorType = cowell;
-        std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings =
-                std::make_shared< TranslationalStatePropagatorSettings< double > >(
-                    centralBodies, accelerationSettingsMap, bodiesToPropagate, systemInitialState,
-                    terminationSettings, propagatorType, dependentVariablesToSave );
-
-
-        // Create integrator settings
-        std::shared_ptr< IntegratorSettings< > > integratorSettings =
-                std::make_shared< IntegratorSettings< > >( rungeKutta4, simulationStartEpoch, 1.0 );
 
         // Construct problem and propagate trajectory using defined settings
-        ShapeOptimizationProblem prob{ bodyMap, integratorSettings, propagatorSettings, vehicleDensity };
-        prob.fitness( shapeParameters );
-        // Save state and dependent variable results to file
-        std::map< double, Eigen::VectorXd> stateHistory = prob.getLastRunPropagatedStateHistory( );
-        std::map< double, Eigen::VectorXd> dependentVariableHistory = prob.getLastRunDependentVariableHistory( );
-        input_output::writeDataMapToTextFile( stateHistory,  "stateHistory.dat", outputPath );
-        input_output::writeDataMapToTextFile( dependentVariableHistory, "dependentVariables.dat", outputPath );
+        shapeOptimizationProblem.fitness( decisionVariables );
 
+        std::vector< double > objectives = shapeOptimizationProblem.getLastRunObjectives( );
+        std::vector< double > constraints = shapeOptimizationProblem.getLastRunConstraints( );
 
-        if( generateAndCompareToBenchmark && i !=0 )
-        {
-            std::map< double, Eigen::VectorXd> stateDifference;
-            std::map< double, Eigen::VectorXd> depVarDifference;
-
-            // Compute difference w.r.t. benchmark using the interpolators we created
-            for( auto stateIterator = stateHistory.begin(); stateIterator != stateHistory.end(); stateIterator++ )
-            {
-                stateDifference[ stateIterator->first ] =
-                        stateIterator->second -
-                        benchmarkStateInterpolator->interpolate( stateIterator->first );
-
-                if( dependentVariableHistory.count( stateIterator->first ) != 0 )
-                {
-                    depVarDifference[ stateIterator->first ] =
-                            dependentVariableHistory.at( stateIterator->first ) -
-                            benchmarkDependentInterpolator->interpolate( stateIterator->first );
-                }
-            }
-
-            // Write differences w.r.t. benchmarks to files
-            input_output::writeDataMapToTextFile(
-                        stateDifference, "stateDifferenceBenchmark.dat", outputPath );
-            input_output::writeDataMapToTextFile(
-                        depVarDifference, "dependentVariablesDifferenceBenchmark.dat", outputPath );
-        }
-        else
-        {
-            benchmarkStateInterpolator = interpolators::createOneDimensionalInterpolator(
-                        stateHistory, std::make_shared< LagrangeInterpolatorSettings >( 8 ) );
-            benchmarkDependentInterpolator = interpolators::createOneDimensionalInterpolator(
-                        dependentVariableHistory, std::make_shared< LagrangeInterpolatorSettings >( 8 ) );
-        }
+        input_output::writeMatrixToFile(
+                    utilities::convertStlVectorToEigenVector( decisionVariables ),
+                    "decisionVariables_" + std::to_string( i ) + ".dat", 16, outputPath );
+        input_output::writeMatrixToFile(
+                    utilities::convertStlVectorToEigenVector( objectives ),
+                    "objectives_" + std::to_string( i ) + ".dat", 16, outputPath );
+        input_output::writeMatrixToFile(
+                    utilities::convertStlVectorToEigenVector( constraints ),
+                    "constraints_" + std::to_string( i ) + ".dat", 16, outputPath );
     }
+
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////   EXAMPLE CODE FOR A SIMPLE OPTIMIZATION            ///////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+//    pagmo::problem prob{ shapeOptimizationProblem };
+
+//    // Solve using DE algorithm
+//    pagmo::algorithm algo{ pagmo::de( ) };
+
+//    // Create island with 1000 individuals
+//    pagmo::island isl = pagmo::island{ algo, prob, 1000 };
+
+//    // Evolve for 1000 generations
+//    for( int i = 1; i <= 100; i++ )
+//    {
+//        isl.evolve( );
+//        while( isl.status( ) != pagmo::evolve_status::idle &&
+//               isl.status( ) != pagmo::evolve_status::idle_error )
+//        {
+//            isl.wait( );
+//        }
+//        isl.wait_check( ); // Raises errors
+//        // Print current optimum to console
+//        std::cout << "Minimum: " <<i<<" "<<std::setprecision( 16 ) <<"f= "<< isl.get_population().champion_f()[0] <<", x="<<
+//                     isl.get_population().champion_x()[0] <<" y="<<isl.get_population().champion_x()[1] <<std::endl;
+
+//    }
+
 }
 

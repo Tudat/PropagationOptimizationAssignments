@@ -104,23 +104,26 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
 
 //! Function to set vehicle properties related to vehicle shape (mass, aerodynamic coefficients)
 void setVehicleShapeParameters(
-        std::vector< double > shapeParameters,
+        const std::vector< double >& decisionVariables,
         const NamedBodyMap& bodyMap,
         const double vehicleDensity )
 {
+    std::vector< double > constrainedDecisionVariables = decisionVariables;
+
     // Apply shape constraint
-    double limitLength = ( shapeParameters[ 1 ] - shapeParameters[ 4 ] * ( 1.0 - std::cos( shapeParameters[ 3 ] ) ) ) /
-            std::tan( -shapeParameters[ 3 ] );
-    if( shapeParameters[ 2 ] >= limitLength - 0.01 )
+    double limitLength =
+            ( constrainedDecisionVariables[ 1 ] - constrainedDecisionVariables[ 4 ] * ( 1.0 - std::cos( constrainedDecisionVariables[ 3 ] ) ) ) /
+            std::tan( -constrainedDecisionVariables[ 3 ] );
+    if( constrainedDecisionVariables[ 2 ] >= limitLength - 0.01 )
     {
-        shapeParameters[ 2 ] = limitLength - 0.01;
+        constrainedDecisionVariables[ 2 ] = limitLength - 0.01;
     }
     
     // Create capsule.
     std::shared_ptr< geometric_shapes::Capsule > capsule
             = std::make_shared< geometric_shapes::Capsule >(
-                shapeParameters[ 0 ], shapeParameters[ 1 ], shapeParameters[ 2 ],
-            shapeParameters[ 3 ], shapeParameters[ 4 ] );
+                constrainedDecisionVariables[ 0 ], constrainedDecisionVariables[ 1 ], constrainedDecisionVariables[ 2 ],
+            constrainedDecisionVariables[ 3 ], constrainedDecisionVariables[ 4 ] );
     
     // Vehicle properties
     bodyMap.at( "Capsule" )->setConstantBodyMass(
@@ -136,24 +139,13 @@ void setVehicleShapeParameters(
 
 //! Function to add the Capsule, and associated shape properties, to the body map.
 void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
-                          std::vector< double >& shapeParameters,
-                          const double vehicleDensity,
-                          const Eigen::VectorXd& vehicleParameterPerturbation )
+                          const std::vector< double >& decisionVariables,
+                          const double vehicleDensity )
 {
 
     // Create vehicle objects.
     bodyMap[ "Capsule" ] = std::make_shared< simulation_setup::Body >( );
-    setVehicleShapeParameters( shapeParameters, bodyMap, vehicleDensity );
-
-    if( vehicleParameterPerturbation.rows( ) > 0 )
-    {
-        double referenceAreaParameterPerturbation = vehicleParameterPerturbation( 0 );
-        std::shared_ptr< AerodynamicCoefficientInterface > capsuleAerodynamicCoefficientInterface =
-                bodyMap.at( "Capsule" )->getAerodynamicCoefficientInterface( );
-        capsuleAerodynamicCoefficientInterface->resetReferenceArea(
-                    ( 1.0 + referenceAreaParameterPerturbation ) *
-                    capsuleAerodynamicCoefficientInterface->getReferenceArea( ) );
-    }
+    setVehicleShapeParameters( decisionVariables, bodyMap, vehicleDensity );
 
     // Finalize body creation.
     setGlobalFrameBodyEphemerides( bodyMap, "Earth", "J2000" );
@@ -165,23 +157,35 @@ void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
 }
 
 
-//! Function to compute propagate the dynamics of the capsule defined by given shapeParameters, and compute its fitness (undefined)
-std::vector< double > ShapeOptimizationProblem::fitness( std::vector< double >& shapeParameters) const
+//! Function to compute propagate the dynamics of the capsule defined by given decisionVariables, and compute its fitness (undefined)
+std::vector< double > ShapeOptimizationProblem::fitness( const std::vector< double >& decisionVariables) const
 {
     // Recreate capsule body with new shape parameters
     bodyMap_.at( "Capsule" ).reset( );
-    addCapsuleToBodyMap( bodyMap_, shapeParameters, vehicleDensity_, vehicleParameterPerturbation_ );
+    addCapsuleToBodyMap( bodyMap_, decisionVariables, vehicleDensity_ );
     
     // Reset propagation and guidance models
     propagatorSettings_->resetIntegratedStateModels( bodyMap_ );
     std::shared_ptr< CapsuleAerodynamicGuidance > capsuleGuidance =
-            std::make_shared< CapsuleAerodynamicGuidance >( bodyMap_, shapeParameters.at( 5 ) );
+            std::make_shared< CapsuleAerodynamicGuidance >( bodyMap_, decisionVariables.at( 5 ) );
     setGuidanceAnglesFunctions( capsuleGuidance, bodyMap_.at( "Capsule" ) );
     
     // Propagate dynamics
     dynamicsSimulator_ = std::make_shared< SingleArcDynamicsSimulator< > >( bodyMap_, integratorSettings_, propagatorSettings_ );
+    computeObjectivesAndConstraints( decisionVariables );
+
+    // Return fitness;
+    return objectives_;
     
-    // Return fitness; for now just return {0.0}
-    return {0.0};
-    
+}
+
+void ShapeOptimizationProblem::computeObjectivesAndConstraints( const std::vector< double >& decisionVariables ) const
+{
+    std::map< double, Eigen::VectorXd > stateHistory =
+            dynamicsSimulator_->getEquationsOfMotionNumericalSolution( );
+    std::map< double, Eigen::VectorXd > dependentVariableHistory =
+            dynamicsSimulator_->getDependentVariableHistory( );
+
+    constraints_; // =
+    objectives_ = { 0.0 }; // =
 }

@@ -371,8 +371,13 @@ int main( )
         std::map< std::string, std::shared_ptr< BodySettings > > bodySettings =
                 getDefaultBodySettings( bodiesToCreate );
 
-        std::shared_ptr< SphericalHarmonicsGravityFieldSettings > moonSphericalHarmonicGravityFieldSettings =
-                std::dynamic_pointer_cast< SphericalHarmonicsGravityFieldSettings >( bodySettings.at( "Moon" )->gravityFieldSettings );
+
+
+
+
+
+
+        
         Eigen::MatrixXd moonCosineSphericalHarmonicsCoefficients =
                 moonSphericalHarmonicGravityFieldSettings->getCosineCoefficients( );
         double c20Perturbation = 0.0;

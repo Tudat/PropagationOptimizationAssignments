@@ -39,15 +39,15 @@ namespace PropagationOptimization2020
 {
 
 //! Function to retrieve time-of-flight from trajectory parameters
-double getTrajectoryTimeOfFlight( const std::vector< double >& trajectoryParameters);
+double getTrajectoryTimeOfFlight( const std::vector< double >& decisionVariables);
 
 //! Function to inital time from trajectory parameters (taking into account a buffer). This buffer is *added* to the
-//! departure time from trajectoryParameters
-double getTrajectoryInitialTime( const std::vector< double >& trajectoryParameters, const double bufferTime = 0.0 );
+//! departure time from decisionVariables
+double getTrajectoryInitialTime( const std::vector< double >& decisionVariables, const double bufferTime = 0.0 );
 
 //! Function to final time from trajectory parameters (taking into account a buffer). This buffer is *subtracted* to the
-//! arrival time from trajectoryParameters
-double getTrajectoryFinalTime( const std::vector< double >& trajectoryParameters, const double bufferTime = 0.0 );
+//! arrival time from decisionVariables
+double getTrajectoryFinalTime( const std::vector< double >& decisionVariables, const double bufferTime = 0.0 );
 
 
 //! Get the propagation termination settings for the lunar ascent.
@@ -62,33 +62,33 @@ double getTrajectoryFinalTime( const std::vector< double >& trajectoryParameters
  * \return Shared pointer to the PropagationTerminationSettings object.
  */
 std::shared_ptr< PropagationTerminationSettings > getPropagationTerminationSettings(
-        const std::vector< double >& trajectoryParameters,
+        const std::vector< double >& decisionVariables,
         const double targetDistance,
         const double trajectoryTimeBuffer );
 
 //! Function that creates the object that computes the semi-analytical hodographic shaping method
 /*!
  *  Function that creates the object that computes the semi-analytical hodographic shaping method
- *  \param trajectoryParameters Parameters that define the trajectory shape (see comments with main function)
+ *  \param decisionVariables Parameters that define the trajectory shape (see comments with main function)
  *  \param bodyMap List of body objects
  *  \return Object that computes the hodographic-shape-based trajectory
  */
 std::shared_ptr< HodographicShaping > createHodographicShapingObject(
-        std::vector< double >& trajectoryParameters,
+        const std::vector< double >& decisionVariables,
         const simulation_setup::NamedBodyMap bodyMap );
 
 //! Function that generates thrust acceleration model from thrust parameters
 std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationSettingsFromParameters(
-        std::vector< double >& trajectoryParameters,
+        const std::vector< double >& decisionVariables,
         const simulation_setup::NamedBodyMap bodyMap );
 
 //! Function to retrieve the semi-analytical calculation of the state along the shape-based trajectory at a given time
 Eigen::Vector6d getHodographicLowThrustStateAtEpoch(
-        std::vector< double >& trajectoryParameters,
+        const std::vector< double >& decisionVariables,
         const simulation_setup::NamedBodyMap bodyMap,
         const double evaluationTime );
 
-class LowThrustProblem
+struct LowThrustProblem
 {
 public:
 
@@ -107,11 +107,10 @@ public:
             const simulation_setup::NamedBodyMap bodyMap,
             const std::shared_ptr< IntegratorSettings< > > integratorSettings,
             const std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings,
+            const std::vector< std::pair< double, double > >& decisionVariableRange,
             double specificImpulse,
             double minimumMarsDistance,
-            double timeBuffer,
-            const bool performPropagation = true,
-            const Eigen::Vector6d initialStatePerturbation =  Eigen::Vector6d::Zero( ) );
+            double timeBuffer );
 
     //! Default constructor
     LowThrustProblem( ){ }
@@ -134,24 +133,43 @@ public:
         return dynamicsSimulator_;
     }
 
-    //! Function to compute propagate the dynamics of the vehicle defined by the trajectoryParameters
+    //! Function to compute propagate the dynamics of the vehicle defined by the decisionVariables
     /*!
-     *  Function to compute propagate the dynamics of the vehicle defined by the trajectoryParameters. This function updates
+     *  Function to compute propagate the dynamics of the vehicle defined by the decisionVariables. This function updates
      *  all relevant settings and properties to the new values of these parameters.
      *
      *  NOTE: Presently no fitness is computed, this must be modified during the group assignment
      *
-     *  \param thrustParameters Values of parameters defining the trajectory (see main function)
+     *  \param decisionVariables Values of parameters defining the trajectory (see main function)
      *  \return Fitness (undefined)
      */
-    std::vector< double > fitness( std::vector< double >& trajectoryParameters ) const;
+    std::vector< double > fitness( const std::vector< double >& decisionVariables ) const;
 
     std::shared_ptr< HodographicShaping > getHodographicShaping( )
     {
         return hodographicShaping_;
     }
 
+    std::pair< std::vector< double >, std::vector< double > > get_bounds( ) const
+    {
+        return boxBounds_;
+    }
+
+    std::vector< double > getLastRunObjectives( )
+    {
+        return objectives_;
+    }
+
+    std::vector< double > getLastRunConstraints( )
+    {
+        return constraints_;
+    }
+
+
 private:
+
+    void computeObjectivesAndConstraints(
+            const std::vector< double >& thrustParameters, const bool performPropagation ) const;
 
     //! Variable holding the body map for the simulation
     mutable simulation_setup::NamedBodyMap bodyMap_;
@@ -174,16 +192,20 @@ private:
     //! Amount of time after shape-based departure time at which to start propagation
     double timeBuffer_;
 
-    //! Boolean denoting whether to propagate dynamics numerically
-    bool performPropagation_;
-
     //! Object that computes the shape-based trajectory semi-analytically
     mutable std::shared_ptr< HodographicShaping > hodographicShaping_;
 
     //! Object holding the dynamics simulator, as created during last call of fitness function
     mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
 
-    Eigen::Vector6d initialStatePerturbation_;
+    //! List of objective values, as computed during last call of fitness function
+    mutable std::vector< double > objectives_;
+
+    //! List of constraint values, as computed during last call of fitness function
+    mutable std::vector< double > constraints_;
+
+    //! List of upper and lower box-bounds for decision variables.
+    std::pair< std::vector< double >, std::vector< double > > boxBounds_;
 
 };
 

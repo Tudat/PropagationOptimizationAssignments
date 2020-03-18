@@ -41,15 +41,14 @@ std::shared_ptr< HypersonicLocalInclinationAnalysis > getCapsuleCoefficientInter
 
 //! Function to set Capsule properties related to vehicle shape (mass, aerodynamic coefficients)
 void setVehicleShapeParameters(
-        std::vector< double > shapeParameters,
+        const std::vector< double >& decisionVariables,
         const NamedBodyMap& bodyMap,
         const double vehicleDensity );
 
 //! Function to add the Capsule, and associated shape properties, to the body map.
 void addCapsuleToBodyMap( NamedBodyMap& bodyMap,
-                          std::vector< double >& shapeParameters,
-                          const double vehicleDensity,
-                          const Eigen::VectorXd& vehicleParameterPerturbation = Eigen::VectorXd::Zero( 0 ) );
+                          const std::vector< double >& decisionVariables,
+                          const double vehicleDensity );
 
 //! Class to set the aerodynamic angles of the capsule (default: all angles 0, angle-of-attack constant at given value)
 class CapsuleAerodynamicGuidance: public aerodynamics::AerodynamicGuidance
@@ -84,8 +83,7 @@ private:
 
 
 //! Class containg the Pagmo-compatible formulation of the shape optimization problem.
-//!
-class ShapeOptimizationProblem
+struct ShapeOptimizationProblem
 {
 public:
 
@@ -101,13 +99,24 @@ public:
             const simulation_setup::NamedBodyMap bodyMap,
             const std::shared_ptr< IntegratorSettings< > > integratorSettings,
             const std::shared_ptr< TranslationalStatePropagatorSettings< double > > propagatorSettings,
-            const double vehicleDensity,
-            const Eigen::VectorXd& vehicleParameterPerturbation = Eigen::VectorXd::Zero( 0 ) ):
+            const std::vector< std::pair< double, double > >& decisionVariableRange,
+            const double vehicleDensity ):
         bodyMap_( bodyMap ), integratorSettings_( integratorSettings ),propagatorSettings_( propagatorSettings ),
-        vehicleDensity_( vehicleDensity ), vehicleParameterPerturbation_( vehicleParameterPerturbation ){ }
+        vehicleDensity_( vehicleDensity )
+    {
+        std::vector< double > boxBoundMinima, boxBoundMaxima;
+        for( unsigned int i = 0; i < decisionVariableRange.size( ); i++ )
+        {
+            boxBoundMinima.push_back( decisionVariableRange.at( i ).first );
+            boxBoundMaxima.push_back( decisionVariableRange.at( i ).second );
+        }
+        boxBounds_ = std::make_pair( boxBoundMinima, boxBoundMaxima );
+    }
 
     //! Default constructor
     ShapeOptimizationProblem( ){ }
+
+    ~ShapeOptimizationProblem( ){ }
 
     //! Function to retrieve the map with the propagated state history computed at last call of fitness function
     std::map< double, Eigen::VectorXd > getLastRunPropagatedStateHistory( ) const
@@ -127,10 +136,9 @@ public:
         return dynamicsSimulator_;
     }
 
-
-    //! Function to compute propagate the dynamics of the capsule defined by the shapeParameters
+    //! Function to compute propagate the dynamics of the capsule defined by the decisionVariables
     /*!
-     *  Function to compute propagate the dynamics of the capsule defined by the shapeParameters. This function updates
+     *  Function to compute propagate the dynamics of the capsule defined by the decisionVariables. This function updates
      *  all relevant settings and properties to the new values of these parameters.
      *
      *  NOTE: Presently no fitness is computed, this must be modified during the group assignment
@@ -138,11 +146,27 @@ public:
      *  \param thrustParameters Values of parameters defining the shape and orientation of capsule (see main function)
      *  \return Fitness (undefined)
      */
-    std::vector< double > fitness( std::vector< double >& shapeParameters ) const;
+    std::vector< double > fitness( const std::vector< double >& decisionVariables ) const;
 
 
+    std::vector< double > getLastRunObjectives( )
+    {
+        return objectives_;
+    }
+
+    std::vector< double > getLastRunConstraints( )
+    {
+        return constraints_;
+    }
+
+    std::pair< std::vector< double >, std::vector< double > > get_bounds( ) const
+    {
+        return boxBounds_;
+    }
 
 private:
+
+    void computeObjectivesAndConstraints( const std::vector< double >& decisionVariables ) const;
 
     //! Variable holding the body map for the simulation
     mutable simulation_setup::NamedBodyMap bodyMap_;
@@ -159,7 +183,14 @@ private:
     //! Object holding the dynamics simulator, as created during last call of fitness function
     mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
 
-    Eigen::VectorXd vehicleParameterPerturbation_;
+    //! List of objective values, as computed during last call of fitness function
+    mutable std::vector< double > objectives_;
+
+    //! List of constraint values, as computed during last call of fitness function
+    mutable std::vector< double > constraints_;
+
+    //! List of upper and lower box-bounds for decision variables.
+    std::pair< std::vector< double >, std::vector< double > > boxBounds_;
 
 };
 

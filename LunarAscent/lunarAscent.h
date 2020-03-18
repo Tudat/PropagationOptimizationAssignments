@@ -37,7 +37,7 @@ namespace PropagationOptimization2020
 
 //! Function that generates thrust acceleration model from thrust parameters
 std::shared_ptr< ThrustAccelerationSettings > getThrustAccelerationModelFromParameters(
-        std::vector< double >& thrustParameters,
+        const std::vector< double >& decisionVariables,
         const simulation_setup::NamedBodyMap bodyMap,
         const double initialTime,
         const double constantSpecificImpulse );
@@ -132,7 +132,7 @@ private:
 
 };
 
-class LunarAscentProblem
+struct LunarAscentProblem
 {
 public:
 
@@ -148,6 +148,7 @@ public:
             const simulation_setup::NamedBodyMap bodyMap,
             const std::shared_ptr< IntegratorSettings< > > integratorSettings,
             const std::shared_ptr< MultiTypePropagatorSettings< double > > propagatorSettings,
+            const std::vector< std::pair< double, double > >& decisionVariableRange,
             const double constantSpecificImpulse = 300.0 );
 
     //! Default constructor
@@ -171,22 +172,36 @@ public:
         return dynamicsSimulator_;
     }
 
-
-    //! Function to compute propagate the dynamics of the vehicle defined by the thrustParameters
+    //! Function to compute propagate the dynamics of the vehicle defined by the decisionVariables
     /*!
-     *  Function to compute propagate the dynamics of the vehicle defined by the thrustParameters. This function updates
+     *  Function to compute propagate the dynamics of the vehicle defined by the decisionVariables. This function updates
      *  all relevant settings and properties to the new values of these parameters.
      *
      *  NOTE: Presently no fitness is computed, this must be modified during the group assignment
      *
-     *  \param thrustParameters Values of parameters defining the thrust profile (see main function)
+     *  \param decisionVariables Values of parameters defining the thrust profile (see main function)
      *  \return Fitness (undefined)
      */
-    std::vector< double > fitness( std::vector< double >& thrustParameters ) const;
+    std::vector< double > fitness( const std::vector< double >& decisionVariables ) const;
 
+    std::pair< std::vector< double >, std::vector< double > > get_bounds( ) const
+    {
+        return boxBounds_;
+    }
 
+    std::vector< double > getLastRunObjectives( )
+    {
+        return objectives_;
+    }
+
+    std::vector< double > getLastRunConstraints( )
+    {
+        return constraints_;
+    }
 
 private:
+
+    void computeObjectivesAndConstraints( const std::vector< double >& decisionVariables ) const;
 
     //! Variable holding the body map for the simulation
     mutable simulation_setup::NamedBodyMap bodyMap_;
@@ -205,6 +220,16 @@ private:
 
     //! Object holding the dynamics simulator, as created during last call of fitness function
     mutable std::shared_ptr<SingleArcDynamicsSimulator< > > dynamicsSimulator_;
+
+    //! List of objective values, as computed during last call of fitness function
+    mutable std::vector< double > objectives_;
+
+    //! List of constraint values, as computed during last call of fitness function
+    mutable std::vector< double > constraints_;
+
+    //! List of upper and lower box-bounds for decision variables.
+    std::pair< std::vector< double >, std::vector< double > > boxBounds_;
+
 };
 
 } // Namespace tudat_applications

@@ -207,14 +207,5 @@ setup_library_target(tudat_application_library_lunar_ascent "${SRCROOT}")
 # Add Lunar Ascent application.
 add_executable(application_PropagationOptimizationLunarAscent "${SRCROOT}/propagationOptimizationLunarAscent.cpp")
 setup_executable_target(application_PropagationOptimizationLunarAscent "${SRCROOT}")
-target_link_libraries(application_PropagationOptimizationLunarAscent tudat_application_library_lunar_ascent json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
-
-add_executable(application_PropagationOptimizationLunarAscentStateUncertainty "${SRCROOT}/propagationOptimizationLunarAscentStateUncertainty.cpp")
-setup_executable_target(application_PropagationOptimizationLunarAscentStateUncertainty "${SRCROOT}")
-target_link_libraries(application_PropagationOptimizationLunarAscentStateUncertainty tudat_application_library_lunar_ascent json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
-
-add_executable(application_PropagationOptimizationLunarAscentParameterUncertainty "${SRCROOT}/propagationOptimizationLunarAscentParameterUncertainty.cpp")
-setup_executable_target(application_PropagationOptimizationLunarAscentParameterUncertainty "${SRCROOT}")
-target_link_libraries(application_PropagationOptimizationLunarAscentParameterUncertainty tudat_application_library_lunar_ascent json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
-
+target_link_libraries(application_PropagationOptimizationLunarAscent pagmo tudat_application_library_lunar_ascent json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
 
