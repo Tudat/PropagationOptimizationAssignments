@@ -205,7 +205,7 @@ add_library(tudat_application_library_low_thrust STATIC ${PROPAGATION_OPTIMIZATI
 setup_library_target(tudat_application_library_low_thrust "${SRCROOT}")
 
 # Add helloWorld application.
-add_executable(application_PropagationOptimizationLowThrust "${SRCROOT}/propagationOptimizationLowThrust.cpp" )
-setup_executable_target(application_PropagationOptimizationLowThrust "${SRCROOT}")
-target_link_libraries(application_PropagationOptimizationLowThrust pagmo tudat_application_library_low_thrust tudat_low_thrust_trajectories tudat_shape_based_methods tudat_numerical_quadrature json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
+add_executable(application_PropagationOptimizationLowThrustGroup "${SRCROOT}/propagationOptimizationLowThrustGroup.cpp" )
+setup_executable_target(application_PropagationOptimizationLowThrustGroup "${SRCROOT}")
+target_link_libraries(application_PropagationOptimizationLowThrustGroup pagmo tudat_application_library_low_thrust tudat_low_thrust_trajectories tudat_shape_based_methods tudat_numerical_quadrature json_interface_library ${TUDAT_ESTIMATION_LIBRARIES} ${Boost_LIBRARIES} )
 
